@@ -83,10 +83,12 @@ Then set the variables from [.env.example](.env.example) and run the app as abov
 ./mvnw test
 ```
 
+The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: each request commits on its own like in production, and the tables are emptied after every test. A transactional test would keep the Hibernate session open for the whole request and hide lazy-loading bugs. `WebTest` also fails if a migration adds a table it doesn't clean.
+
 - `RegistrationTests`: sign-up, validation, duplicate emails, CSRF and login.
 - `ItemControllerTests`: creating, editing and deleting items, and that another user can't see or change them.
 - `LoanTest`: the loan state machine on its own, including every forbidden transition (parameterized), with no Spring or database.
-- `LoanFlowTests`: the whole loan flow over HTTP, who may do what, due-date limits, one person at a time, overdue display, and no deleting lent-out items. It runs **without a test transaction** so it behaves like production (see PROGRESS.md for the bug this caught).
+- `LoanFlowTests`: the whole loan flow over HTTP, who may do what, due-date limits, one person at a time, overdue display, and no deleting lent-out items. (See PROGRESS.md for the bug that led to `WebTest`.)
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
