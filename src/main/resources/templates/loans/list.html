@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Loans')}"></head>
+<body>
+  <header th:replace="~{fragments :: topbar}"></header>
+  <main th:with="o=${overview}">
+    <h1>Loans</h1>
+
+    <p th:if="${message}" class="notice" role="status" th:text="${message}">Lent “Catan” to Sam.</p>
+    <p th:if="${error}" class="alert" role="alert" th:text="${error}">That request was already answered.</p>
+
+    <p th:if="${#lists.isEmpty(o.incomingRequests) and #lists.isEmpty(o.lentOut) and #lists.isEmpty(o.borrowed)
+                 and #lists.isEmpty(o.myRequests) and #lists.isEmpty(o.history)}" class="card empty muted">
+      Nothing borrowed or lent yet. Open one of your <a th:href="@{/groups}">groups</a> and ask for something,
+      or wait for friends to ask for your things.
+    </p>
+
+    <!-- Requests for my things: the only section with a decision to make, so it comes first. -->
+    <section th:unless="${#lists.isEmpty(o.incomingRequests)}">
+      <h2 class="section-title">Waiting for your answer
+        <span class="count" th:text="${#lists.size(o.incomingRequests)}">1</span></h2>
+      <ul class="item-list">
+        <li th:each="loan : ${o.incomingRequests}" class="card loan">
+          <div class="item-main">
+            <h3 class="item-name">
+              <span th:text="${loan.borrower.displayName}">Sam</span> wants to borrow
+              <span th:text="${loan.item.name}">Catan</span>
+            </h3>
+            <p th:if="${loan.message}" class="loan-message" th:text="${loan.message}">For Friday's game night.</p>
+          </div>
+          <div class="loan-actions">
+            <form th:action="@{/loans/{id}/approve(id=${loan.id})}" method="post" class="approve-form">
+              <label>Return by
+                <input type="date" name="dueDate" required th:value="${defaultDueDate}"
+                       th:attr="min=${today},max=${maxDueDate}">
+              </label>
+              <button type="submit" class="button">Lend it</button>
+            </form>
+            <form th:action="@{/loans/{id}/decline(id=${loan.id})}" method="post">
+              <button type="submit" class="button button-secondary">Decline</button>
+            </form>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <section th:unless="${#lists.isEmpty(o.lentOut)}">
+      <h2 class="section-title">Lent out <span class="count" th:text="${#lists.size(o.lentOut)}">1</span></h2>
+      <ul class="item-list">
+        <li th:each="loan : ${o.lentOut}" class="card loan">
+          <div class="item-main">
+            <h3 class="item-name" th:text="${loan.item.name}">Catan</h3>
+            <p class="item-meta">
+              <span th:text="'with ' + ${loan.borrower.displayName}">with Sam</span>
+              <span th:replace="~{fragments :: due(${loan}, ${today})}"></span>
+            </p>
+          </div>
+          <form th:action="@{/loans/{id}/return(id=${loan.id})}" method="post" class="loan-actions">
+            <button type="submit" class="button button-secondary">It's back</button>
+          </form>
+        </li>
+      </ul>
+    </section>
+
+    <section th:unless="${#lists.isEmpty(o.borrowed)}">
+      <h2 class="section-title">Borrowed by you <span class="count" th:text="${#lists.size(o.borrowed)}">1</span></h2>
+      <ul class="item-list">
+        <li th:each="loan : ${o.borrowed}" class="card loan">
+          <div class="item-main">
+            <h3 class="item-name" th:text="${loan.item.name}">Drill</h3>
+            <p class="item-meta">
+              <span th:text="'from ' + ${loan.item.owner.displayName}">from Alex</span>
+              <span th:replace="~{fragments :: due(${loan}, ${today})}"></span>
+            </p>
+            <p class="hint">Give it back to <span th:text="${loan.item.owner.displayName}">Alex</span>;
+              they'll mark it as returned.</p>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <section th:unless="${#lists.isEmpty(o.myRequests)}">
+      <h2 class="section-title">Your requests <span class="count" th:text="${#lists.size(o.myRequests)}">1</span></h2>
+      <ul class="item-list">
+        <li th:each="loan : ${o.myRequests}" class="card loan">
+          <div class="item-main">
+            <h3 class="item-name" th:text="${loan.item.name}">Tent</h3>
+            <p class="item-meta">
+              <span th:text="'asked ' + ${loan.item.owner.displayName}">asked Kim</span>
+              <span class="status status-off">Waiting</span>
+            </p>
+          </div>
+          <form th:action="@{/loans/{id}/cancel(id=${loan.id})}" method="post" class="loan-actions">
+            <button type="submit" class="button button-secondary">Withdraw</button>
+          </form>
+        </li>
+      </ul>
+    </section>
+
+    <section th:unless="${#lists.isEmpty(o.history)}">
+      <h2 class="section-title">History</h2>
+      <ul class="member-list card history">
+        <li th:each="loan : ${o.history}">
+          <span th:text="${loan.item.name}">Catan</span>
+          <span class="muted" th:text="${loan.borrower.id == #authentication.principal.id()}
+                ? 'from ' + ${loan.item.owner.displayName} : 'to ' + ${loan.borrower.displayName}">to Sam</span>
+          <span class="tag" th:text="${#strings.capitalize(#strings.toLowerCase(loan.status.name()))}">Returned</span>
+        </li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

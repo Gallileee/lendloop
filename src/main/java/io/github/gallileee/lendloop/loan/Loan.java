@@ -1,0 +1,160 @@
+package io.github.gallileee.lendloop.loan;
+
+import io.github.gallileee.lendloop.item.Item;
+import io.github.gallileee.lendloop.user.AppUser;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import java.time.Instant;
+import java.time.LocalDate;
+
+// One request to borrow one item, and what became of it. The status only changes through
+// the transition methods below, each of which checks that it is allowed from the current
+// status. Who may call which one (owner or borrower) is checked in LoanService.
+@Entity
+public class Loan {
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "item_id", nullable = false)
+	private Item item;
+
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "borrower_id", nullable = false)
+	private AppUser borrower;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private LoanStatus status;
+
+	private String message;
+
+	@Column(name = "due_date")
+	private LocalDate dueDate;
+
+	@Column(name = "requested_at", nullable = false)
+	private Instant requestedAt;
+
+	@Column(name = "decided_at")
+	private Instant decidedAt;
+
+	@Column(name = "returned_at")
+	private Instant returnedAt;
+
+	// Copies of the ids that back the database's uniqueness rules (see V3__loans.sql).
+	// Kept in sync with the status by syncUniquenessKeys(); never read by the app.
+	@Column(name = "active_item_id")
+	private Long activeItemId;
+
+	@Column(name = "open_request_item_id")
+	private Long openRequestItemId;
+
+	@Column(name = "open_request_borrower_id")
+	private Long openRequestBorrowerId;
+
+	protected Loan() {
+		// for JPA
+	}
+
+	public Loan(Item item, AppUser borrower, String message, Instant now) {
+		this.item = item;
+		this.borrower = borrower;
+		this.message = message;
+		this.status = LoanStatus.REQUESTED;
+		this.requestedAt = now;
+		syncUniquenessKeys();
+	}
+
+	public void approve(LocalDate dueDate, Instant now) {
+		requireStatus(LoanStatus.REQUESTED, "This request was already answered or withdrawn.");
+		this.dueDate = dueDate;
+		this.decidedAt = now;
+		moveTo(LoanStatus.ACTIVE);
+	}
+
+	public void decline(Instant now) {
+		requireStatus(LoanStatus.REQUESTED, "This request was already answered or withdrawn.");
+		this.decidedAt = now;
+		moveTo(LoanStatus.DECLINED);
+	}
+
+	public void cancel(Instant now) {
+		requireStatus(LoanStatus.REQUESTED, "This request was already answered, so it can't be withdrawn.");
+		this.decidedAt = now;
+		moveTo(LoanStatus.CANCELLED);
+	}
+
+	public void markReturned(Instant now) {
+		requireStatus(LoanStatus.ACTIVE, "Only an item that is lent out can be marked as returned.");
+		this.returnedAt = now;
+		moveTo(LoanStatus.RETURNED);
+	}
+
+	public boolean isOverdueOn(LocalDate today) {
+		return status == LoanStatus.ACTIVE && dueDate.isBefore(today);
+	}
+
+	private void requireStatus(LoanStatus expected, String userMessage) {
+		if (status != expected) {
+			throw new LoanRuleException(userMessage);
+		}
+	}
+
+	private void moveTo(LoanStatus next) {
+		this.status = next;
+		syncUniquenessKeys();
+	}
+
+	private void syncUniquenessKeys() {
+		Long itemId = item.getId();
+		activeItemId = status == LoanStatus.ACTIVE ? itemId : null;
+		openRequestItemId = status == LoanStatus.REQUESTED ? itemId : null;
+		openRequestBorrowerId = status == LoanStatus.REQUESTED ? borrower.getId() : null;
+	}
+
+	public Long getId() {
+		return id;
+	}
+
+	public Item getItem() {
+		return item;
+	}
+
+	public AppUser getBorrower() {
+		return borrower;
+	}
+
+	public LoanStatus getStatus() {
+		return status;
+	}
+
+	public String getMessage() {
+		return message;
+	}
+
+	public LocalDate getDueDate() {
+		return dueDate;
+	}
+
+	public Instant getRequestedAt() {
+		return requestedAt;
+	}
+
+	public Instant getDecidedAt() {
+		return decidedAt;
+	}
+
+	public Instant getReturnedAt() {
+		return returnedAt;
+	}
+}

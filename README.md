@@ -8,7 +8,7 @@ People keep asking online for an app that tracks what they own, what they want a
 
 ## Status
 
-**Milestones 1 and 2a are done:** accounts, your own list of items, and groups with invite links. Borrow requests and reminders come next (see [Roadmap](#roadmap)).
+**Milestones 1 and 2 are done:** accounts, your own items, groups with invite links, and loans from request to return. Reminders come next (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -27,6 +27,17 @@ People keep asking online for an app that tracks what they own, what they want a
   - Someone logged out is sent to the login page (or sign-up) and then back to the invite.
   - Following the link again doesn't create a second membership: there's a check, plus a unique constraint for two clicks at the same moment.
   - Pages send `Referrer-Policy: same-origin`, so tokens in URLs never leak to other sites.
+- **Loans**, from asking to giving back:
+  - On a group page, a member can **ask to borrow** someone else's item, with an optional message.
+  - The owner sees the request under **Loans** (with a badge in the top bar) and either **lends it** with a return date (default 14 days, at most a year) or **declines**.
+  - The borrower can withdraw a request until it's answered.
+  - The owner confirms when it's back (**It's back**).
+  - Loans past their date say "Overdue since ..." in words, not just in colour.
+  - My things shows "Lent to Sam, Due 17 Nov 2026". A lent-out item can't be deleted.
+  - Who may do what is enforced on the server. Only the owner answers and confirms the return, and only the borrower withdraws; anyone else gets 404. You can only ask people you share a group with.
+- **The loan rules are a small state machine:** `REQUESTED -> ACTIVE -> RETURNED`, or `REQUESTED -> DECLINED / CANCELLED`.
+  - The `Loan` entity refuses every other change.
+  - The database also guarantees one active loan per item and one open request per person and item, even when two requests race.
 - Server-rendered pages that work without JavaScript (JavaScript only adds a confirmation before deleting), in light and dark mode, and usable on a phone.
 
 ## Tech stack
@@ -74,9 +85,12 @@ Then set the variables from [.env.example](.env.example) and run the app as abov
 
 - `RegistrationTests`: sign-up, validation, duplicate emails, CSRF and login.
 - `ItemControllerTests`: creating, editing and deleting items, and that another user can't see or change them.
+- `LoanTest`: the loan state machine on its own, including every forbidden transition (parameterized), with no Spring or database.
+- `LoanFlowTests`: the whole loan flow over HTTP, who may do what, due-date limits, one person at a time, overdue display, and no deleting lent-out items. It runs **without a test transaction** so it behaves like production (see PROGRESS.md for the bug this caught).
+- `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
-- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group queries. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
+- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group and loan queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
 
 ## Project structure
 
@@ -86,7 +100,8 @@ src/main/java/io/github/gallileee/lendloop/
   security/   Spring Security config and the logged-in user (AppUserDetails)
   item/       items: entity, repository, service (ownership checks), controller
   group/      groups, membership, invite tokens, join flow
-  web/        home redirect, login page, top bar navigation
+  loan/       loans: state machine (Loan), rules (LoanService), pages
+  web/        home redirect, login page, top bar data, date formatting
 src/main/resources/
   db/migration/   Flyway SQL migrations
   templates/      Thymeleaf pages
@@ -97,7 +112,9 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 ## Limitations
 
-- Items in a group can be seen but not borrowed yet: borrow requests are milestone 2b.
+- Nobody is notified by email yet: requests and due dates are only visible in the app (milestone 3).
+- "Today" and due dates use the server's time zone.
+- Only the owner can mark a loan as returned. If they forget, it stays lent out.
 - Invite tokens are stored in plain text so the owner can see the link again. Anyone with read access to the database could use a link until it expires.
 - The invite expiry is shown in the server's time zone. Behind a reverse proxy, set `server.forward-headers-strategy=framework` so invite links use the public host and https.
 - Groups can't be renamed or deleted, and members can't be removed by the owner yet.
@@ -108,8 +125,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 ## Roadmap
 
 1. ~~Accounts and your own items~~ (done)
-2. ~~**Groups:** invite link, membership, the group's lendable items~~ (done)
-   **Loans:** ask to borrow; the owner approves or declines and sets a due date; mark it returned. Loan states: requested → active → returned, or declined / cancelled.
+2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
 3. **Reminders:** a daily job emails borrowers about overdue loans (Mailpit locally); record a loan to someone outside the app; fill in book details from an ISBN via Open Library.
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 

@@ -1,5 +1,46 @@
 # Progress log
 
+## 2026-11-03: Milestone 2b, loans
+
+Done:
+- Flyway `V3__loans.sql`: a `loan` table with a status check constraint and "active loans have a due date".
+  - **One active loan per item** and **one open request per person and item**. On PostgreSQL these would be partial unique indexes, but H2 has none. Instead, nullable copy columns (`active_item_id`, `open_request_item_id` + `open_request_borrower_id`) are filled only while the rule applies, and normal unique constraints ignore their NULLs. This works on both databases.
+- `Loan` entity = state machine:
+  - `approve`, `decline`, `cancel`, `markReturned` check the current status, throw `LoanRuleException` with a user-facing message otherwise, and keep the copy columns in sync.
+  - `isOverdueOn(today)`.
+- `LoanService` checks who may act (otherwise 404):
+  - **Borrower:** request (needs a shared group, a lendable item that isn't theirs, the item not lent out, no open request already) and cancel.
+  - **Owner:** approve with a due date (today to +365 days), decline and mark returned.
+  - The repository flushes inside the method, so a race hits the unique constraint as a `DataIntegrityViolationException`, which the controller reports as a normal message.
+- `LoanController` (PRG with flash messages), `loans/list.html` with sections:
+  - waiting for your answer (date input, default +14 days),
+  - lent out, borrowed by you, your requests, history (last 20).
+- Group page: *Ask to borrow* (with an optional message) / *Requested* / *On loan* / *You have it* / *Lent to X*.
+- My things: *Lent to X, Due ...*. A lent-out item can't be deleted (that would cascade-delete the loan).
+- Top bar: *Loans* link with a badge counting requests that wait for you (one count query per GET).
+- `Dates` bean for English dates in templates (`${@dates.format(d)}`) and "today" from the shared `Clock`.
+- Tests:
+  - `LoanTest`: 13, pure unit tests, parameterized over every forbidden transition.
+  - `LoanFlowTests`: 10.
+  - `LoanConstraintTests`: 3.
+  - `PostgresMigrationTest` +1: loan queries with `nulls last` / `limit`, and the constraint on PostgreSQL.
+  - 55 in total.
+
+**Bug found in the browser, not by the tests:** asking to borrow failed with `LazyInitializationException`. The controller read the item owner's name after the service's transaction had ended, and open-in-view is off.
+- The MockMvc tests passed because `@Transactional` test classes run every request inside the test's transaction, so the Hibernate session never closes.
+- Fix: `ItemRepository.findWithOwnerById` (fetch join).
+- `LoanFlowTests` now runs **without** a test transaction and empties the tables after each test. With the old code it fails with the same exception (checked by temporarily reverting the fix).
+- The other MockMvc test classes are still transactional and could hide the same kind of bug (next step 2).
+
+Verified locally:
+- `./mvnw test`: 52 passed, 3 skipped (PostgreSQL, no Docker; CI runs them).
+- In the browser with two accounts:
+  - Friend withdrew the request left over from the crash, then asked again from the group: "Asked Demo for 'Catan'", and the group page shows *Requested*.
+  - Demo saw badge 1 and the message, with a date input defaulting to 17 Nov 2026 (min today, max +1 year). *Lend it* -> "Lent 'Catan' to Friend until 17 Nov 2026".
+  - My things showed *Lent to Friend, Due 17 Nov 2026*. Deleting was refused with the message.
+  - *It's back* -> "'Catan' is back", and the history shows Returned and Cancelled.
+  - No horizontal overflow at 375 px, and no server exceptions after the fix.
+
 ## 2026-11-03: Milestone 2a, groups with invite links
 
 Done:
@@ -72,8 +113,8 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. **Loans:** `loan` table and a state machine (requested → active → returned; declined; cancelled) in one service with tests for every allowed and forbidden transition; only the owner approves, only the borrower cancels; an item can have at most one active loan (DB constraint).
-2. Overdue reminders: `@Scheduled` daily job + email (Spring Mail, Mailpit in compose).
+1. Overdue reminders: `@Scheduled` daily job + email (Spring Mail, Mailpit in compose).
+2. Run `ItemControllerTests` and `GroupTests` without a test transaction too (like `LoanFlowTests`), so lazy-loading bugs can't hide.
 3. Loan to someone outside the app (just a name).
 4. ISBN lookup via Open Library for books.
 5. Login rate limiting, password reset by email.

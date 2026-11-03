@@ -1,12 +1,20 @@
 package io.github.gallileee.lendloop;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.gallileee.lendloop.group.AppGroup;
 import io.github.gallileee.lendloop.group.GroupForm;
 import io.github.gallileee.lendloop.group.GroupService;
 import io.github.gallileee.lendloop.item.Category;
 import io.github.gallileee.lendloop.item.Item;
+import io.github.gallileee.lendloop.loan.Loan;
+import io.github.gallileee.lendloop.loan.LoanRepository;
+import io.github.gallileee.lendloop.loan.LoanService;
+import io.github.gallileee.lendloop.loan.LoanStatus;
+import java.time.Instant;
+import java.time.LocalDate;
+import org.springframework.dao.DataIntegrityViolationException;
 import io.github.gallileee.lendloop.item.ItemForm;
 import io.github.gallileee.lendloop.item.ItemService;
 import io.github.gallileee.lendloop.user.AppUser;
@@ -33,6 +41,45 @@ class PostgresMigrationTest {
 
 	@Autowired
 	GroupService groupService;
+
+	@Autowired
+	LoanService loanService;
+
+	@Autowired
+	LoanRepository loans;
+
+	// The loan queries (nulls last, limit) and the uniqueness constraints on PostgreSQL.
+	@Test
+	void loansWorkOnPostgres() {
+		AppUser owner = users.save(new AppUser("pg-lender@example.com", "Lender", "{noop}irrelevant"));
+		AppUser borrower = users.save(new AppUser("pg-borrower@example.com", "Borrower", "{noop}irrelevant"));
+		AppUser other = users.save(new AppUser("pg-other@example.com", "Other", "{noop}irrelevant"));
+		GroupForm groupForm = new GroupForm();
+		groupForm.setName("Loan club");
+		AppGroup group = groupService.create(owner.getId(), groupForm);
+		groupService.join(group.getInviteToken(), borrower.getId());
+		groupService.join(group.getInviteToken(), other.getId());
+		ItemForm itemForm = new ItemForm();
+		itemForm.setName("Ladder");
+		itemForm.setCategory(Category.TOOL);
+		Item ladder = itemService.create(owner.getId(), itemForm);
+
+		Loan loan = loanService.request(ladder.getId(), borrower.getId(), "Weekend");
+		Loan otherRequest = loanService.request(ladder.getId(), other.getId(), null);
+		loanService.approve(loan.getId(), owner.getId(), LocalDate.now().plusDays(7));
+		assertThat(loanService.overview(owner.getId()).lentOut()).extracting(Loan::getId).containsExactly(loan.getId());
+		assertThat(loanService.overview(owner.getId()).incomingRequests()).hasSize(1);
+
+		// Approving the second request directly in the entity, bypassing the service's check,
+		// must still be refused by the unique constraint.
+		Loan sneaky = loans.findById(otherRequest.getId()).orElseThrow();
+		sneaky.approve(LocalDate.now().plusDays(7), Instant.now());
+		assertThatThrownBy(() -> loans.saveAndFlush(sneaky)).isInstanceOf(DataIntegrityViolationException.class);
+
+		loanService.markReturned(loan.getId(), owner.getId());
+		assertThat(loanService.overview(borrower.getId()).history()).extracting(Loan::getStatus)
+			.containsExactly(LoanStatus.RETURNED);
+	}
 
 	@Test
 	void groupQueriesWorkOnPostgres() {

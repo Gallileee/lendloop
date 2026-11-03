@@ -10,6 +10,7 @@
   --danger: #b3261e;
   --notice-bg: #e3f1ec;
   --alert-bg: #fbe7e5;
+  --late: #a14d00;
   --radius: 10px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   line-height: 1.5;
@@ -27,6 +28,7 @@
     --danger: #f2877e;
     --notice-bg: #1f3a31;
     --alert-bg: #42211e;
+    --late: #f0a35e;
   }
 }
 
@@ -218,8 +220,59 @@ section + section, .card + section, section + .card { margin-top: 24px; }
 .item-list h3.item-name { font-size: 1.0625rem; margin: 0; }
 .leave { margin-top: 24px; }
 
+/* --- loans --- */
+.badge {
+  display: inline-block;
+  min-width: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  line-height: 20px;
+  text-align: center;
+}
+.status-late { color: var(--late); border-color: currentColor; font-weight: 600; }
+a.status { text-decoration: none; }
+.loan-message {
+  margin: 8px 0 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.loan-actions { display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; flex-wrap: wrap; margin: 0; }
+.loan-actions form { margin: 0; }
+.approve-form { display: flex; gap: 8px; align-items: flex-end; }
+.approve-form label { display: grid; gap: 4px; font-size: 0.875rem; font-weight: 600; }
+.approve-form input { width: auto; padding: 8px 10px; }
+.history li { flex-wrap: wrap; }
+.history .tag { margin-left: auto; }
+
+.ask { position: relative; }
+.ask summary { list-style: none; }
+.ask summary::-webkit-details-marker { display: none; }
+.ask[open] summary { background: var(--bg); }
+.ask-form {
+  margin: 8px 0 0;
+  padding: 12px;
+  width: min(320px, 80vw);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.item-actions .status { align-self: center; }
+
 @media (max-width: 560px) {
   .topbar { flex-wrap: wrap; row-gap: 8px; }
+  .item-actions .ask, .ask summary { width: 100%; }
+  .ask-form { width: 100%; }
+  .loan-actions, .approve-form { width: 100%; }
+  .approve-form { flex-wrap: wrap; }
+  .approve-form label { flex: 1; }
+  .approve-form input { width: 100%; }
   .topbar-links { order: 3; width: 100%; }
   .form-inline { grid-template-columns: 1fr; }
   .form-inline .button { margin-top: 0; }

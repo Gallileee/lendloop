@@ -19,4 +19,11 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
 			  and o.id in (select m.user.id from GroupMember m where m.group.id = :groupId)
 			order by lower(i.name), i.id""")
 	List<Item> findLendableInGroup(Long groupId);
+
+	// With the owner loaded, for callers that show the owner's name after the transaction.
+	@Query("select i from Item i join fetch i.owner where i.id = :id")
+	Optional<Item> findWithOwnerById(Long id);
+
+	@Query("select count(l) > 0 from Loan l where l.item.id = :itemId and l.status = 'ACTIVE'")
+	boolean isLentOut(Long itemId);
 }
