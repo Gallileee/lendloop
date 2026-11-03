@@ -6,6 +6,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 
 @Configuration
 public class SecurityConfig {
@@ -18,12 +19,15 @@ public class SecurityConfig {
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/login", "/register", "/css/**", "/error").permitAll()
 				.anyRequest().authenticated())
+			// After login, go back to the page that asked for it (e.g. an invite link), else to /items.
 			.formLogin(form -> form
 				.loginPage("/login")
 				.usernameParameter("email")
-				.defaultSuccessUrl("/items", true)
+				.defaultSuccessUrl("/items")
 				.permitAll())
-			.logout(logout -> logout.logoutSuccessUrl("/login?logout"));
+			.logout(logout -> logout.logoutSuccessUrl("/login?logout"))
+			// Invite tokens are in URLs; never send them to other sites in the Referer header.
+			.headers(headers -> headers.referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.SAME_ORIGIN)));
 		return http.build();
 	}
 
