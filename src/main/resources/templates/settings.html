@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Settings')}"></head>
+<body>
+  <header th:replace="~{fragments :: topbar}"></header>
+  <main class="narrow">
+    <h1>Settings</h1>
+
+    <p th:if="${saved}" class="notice" role="status">Settings saved.</p>
+
+    <form th:action="@{/settings}" th:object="${form}" method="post" class="card form" novalidate>
+      <label>Your name
+        <input type="text" th:field="*{displayName}" maxlength="60" required autocomplete="name"
+               th:attr="aria-invalid=${#fields.hasErrors('displayName')}">
+        <span class="hint">Your friends see it in groups and in loan emails.</span>
+        <span class="field-error" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}"></span>
+      </label>
+      <fieldset class="settings-group">
+        <legend>Emails</legend>
+        <label class="checkbox">
+          <input type="checkbox" th:field="*{remindBorrowed}">
+          Remind me the day before something I borrowed is due, and when it's overdue
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" th:field="*{notifyLentOverdue}">
+          Tell me when something I lent out is overdue
+        </label>
+      </fieldset>
+      <div class="form-actions">
+        <button type="submit" class="button">Save</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

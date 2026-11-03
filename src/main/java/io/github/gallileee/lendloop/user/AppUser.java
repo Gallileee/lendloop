@@ -28,6 +28,14 @@ public class AppUser {
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
+	// Emails about things I borrowed: due tomorrow, overdue.
+	@Column(name = "remind_borrowed", nullable = false)
+	private boolean remindBorrowed = true;
+
+	// An email when something I lent out becomes overdue.
+	@Column(name = "notify_lent_overdue", nullable = false)
+	private boolean notifyLentOverdue = true;
+
 	protected AppUser() {
 		// for JPA
 	}
@@ -37,6 +45,12 @@ public class AppUser {
 		this.displayName = displayName;
 		this.passwordHash = passwordHash;
 		this.createdAt = Instant.now();
+	}
+
+	public void changeSettings(String displayName, boolean remindBorrowed, boolean notifyLentOverdue) {
+		this.displayName = displayName;
+		this.remindBorrowed = remindBorrowed;
+		this.notifyLentOverdue = notifyLentOverdue;
 	}
 
 	public Long getId() {
@@ -57,5 +71,13 @@ public class AppUser {
 
 	public Instant getCreatedAt() {
 		return createdAt;
+	}
+
+	public boolean isRemindBorrowed() {
+		return remindBorrowed;
+	}
+
+	public boolean isNotifyLentOverdue() {
+		return notifyLentOverdue;
 	}
 }

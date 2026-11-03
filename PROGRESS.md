@@ -1,5 +1,25 @@
 # Progress log
 
+## 2026-11-03: Milestone 3b, email settings and the owner's overdue notice
+
+Done:
+- Flyway `V5__notification_settings.sql`: `app_user.remind_borrowed` and `app_user.notify_lent_overdue`, both `default true not null`, so existing users keep getting reminders.
+- **Settings page** (`/settings`, linked from your name in the top bar): `SettingsForm`, `SettingsService`, `SettingsController`, `settings.html`.
+  - Change the display name (same rules as sign-up) and the two email switches.
+  - The principal in the session is replaced after saving, so the top bar shows the new name at once. Since Spring Security 6 a changed `SecurityContext` isn't saved automatically, so the controller calls `HttpSessionSecurityContextRepository.saveContext`.
+- **Owner notice:** `Loan.ownerNoticeDueOn(today)` is true together with the borrower's *first* overdue reminder only. The email: "“Catan” is overdue at Sam".
+- `LoanReminderJob` checks both switches. A loan is recorded as handled even if nobody wanted an email, so the owner notice stays a one-off.
+  - A failed borrower email: not recorded, retried next run (as before), and the owner isn't emailed yet either.
+  - A failed owner email: only logged. Retrying it would send the borrower's reminder twice.
+- Every email ends with a link to the Settings page (common advice: give a preferences link in every notification email, and only offer settings the system enforces).
+- `ReminderMailer`: shared `mail(...)` and `deliver(...)`; the owner notice reuses the header-injection protection.
+- Tests: `SettingsTests` (6), `LoanReminderTests` +3 (8), `LoanTest` +1 (19). 75 in total.
+
+Verified locally:
+- `./mvnw test`: 72 passed, 3 skipped (PostgreSQL, no Docker; CI runs them, including V5 on PostgreSQL through `ddl-auto=validate`).
+
+Not verified locally: the Settings page in a browser (starting the local server was declined in this automated run). To check by hand: `./mvnw spring-boot:run`, log in, click your name, rename yourself and untick a box, and check the top bar and that the boxes stay unticked after a reload.
+
 ## 2026-11-03: Milestone 3a, due-date reminders by email
 
 Done:
@@ -156,8 +176,8 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Reminder settings: a "Settings" page where users turn reminder emails off (`app_user.email_reminders`), and the owner gets a copy when a loan becomes overdue.
-2. Loan to someone outside the app (just a name).
+1. Loan to someone outside the app (just a name).
+2. Check the Settings page in the browser (name in the top bar, phone layout), then consider a signed one-click unsubscribe link (RFC 8058) in emails.
 3. ISBN lookup via Open Library for books.
 4. Login rate limiting, password reset by email.
 5. Czech translation (`messages_cs.properties`).

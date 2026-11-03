@@ -30,6 +30,9 @@ public class NavigationAdvice {
 		if (path.startsWith("/loans")) {
 			return "loans";
 		}
+		if (path.startsWith("/settings")) {
+			return "settings";
+		}
 		return "";
 	}
 

@@ -124,6 +124,18 @@ class LoanTest {
 		Loan loan = loanIn(status);
 		assertThat(loan.reminderDueOn(TODAY.plusDays(13))).isEmpty();
 		assertThat(loan.reminderDueOn(TODAY.plusDays(20))).isEmpty();
+		assertThat(loan.ownerNoticeDueOn(TODAY.plusDays(20))).isFalse();
+	}
+
+	@Test
+	void theOwnerIsToldOnlyWhenTheLoanBecomesOverdue() {
+		Loan loan = loanIn(LoanStatus.ACTIVE); // due in 14 days, never reminded
+		LocalDate due = TODAY.plusDays(14);
+		assertThat(loan.ownerNoticeDueOn(due.minusDays(1))).as("due tomorrow").isFalse();
+		assertThat(loan.ownerNoticeDueOn(due)).isFalse();
+		assertThat(loan.ownerNoticeDueOn(due.plusDays(1))).isTrue();
+		// The weekly reminders after the first are covered in LoanReminderTests, which can
+		// record a reminder in the database.
 	}
 
 	private static void assertRefused(LoanStatus status, Consumer<Loan> action) {

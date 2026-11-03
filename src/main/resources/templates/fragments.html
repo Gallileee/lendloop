@@ -18,7 +18,9 @@
          th:text="${openRequests}">2</span></a>
     </nav>
     <nav sec:authorize="isAuthenticated()" class="topbar-nav" aria-label="Account">
-      <span class="muted" th:text="${#authentication.principal.displayName()}">Alex</span>
+      <a th:href="@{/settings}" th:attr="aria-current=${section == 'settings'} ? 'page' : null"
+         th:title="'Settings for ' + ${#authentication.principal.displayName()}"
+         th:text="${#authentication.principal.displayName()}">Alex</a>
       <form th:action="@{/logout}" method="post">
         <button type="submit" class="link-button">Log out</button>
       </form>
