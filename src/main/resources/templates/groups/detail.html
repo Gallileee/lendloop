@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${page.group.name})}"></head>
+<body>
+  <header th:replace="~{fragments :: topbar}"></header>
+  <main>
+    <p class="breadcrumb"><a th:href="@{/groups}">Groups</a></p>
+    <h1 th:text="${page.group.name}">Flat 4B</h1>
+
+    <p th:if="${message}" class="notice" role="status" th:text="${message}">Group created.</p>
+    <p th:if="${error}" class="alert" role="alert" th:text="${error}">You can't leave.</p>
+
+    <section th:if="${inviteUrl}" class="card invite">
+      <h2>Invite friends</h2>
+      <p class="muted">
+        Anyone with this link can join until
+        <time th:datetime="${page.group.inviteExpiresAt}"
+              th:text="${inviteExpiresOn}">10 Nov 2026, 14:30</time>.
+        Share it only with people you'd lend to.
+      </p>
+      <div class="invite-row">
+        <input type="text" id="invite-url" th:value="${inviteUrl}" readonly aria-label="Invite link">
+        <button type="button" class="button" data-copy="invite-url">Copy</button>
+      </div>
+      <form th:action="@{/groups/{id}/invite(id=${page.group.id})}" method="post"
+            data-confirm="Make a new link? The current one will stop working.">
+        <button type="submit" class="link-button">Make a new link</button>
+      </form>
+    </section>
+
+    <section>
+      <h2 class="section-title">Things you can borrow
+        <span class="count" th:text="${#lists.size(page.lendableItems)}">3</span></h2>
+      <p th:if="${#lists.isEmpty(page.lendableItems)}" class="card empty muted">
+        Nobody in this group has anything to lend yet. Add your things under
+        <a th:href="@{/items}">My things</a> and keep "Friends can ask to borrow it" on.
+      </p>
+      <ul th:unless="${#lists.isEmpty(page.lendableItems)}" class="item-list">
+        <li th:each="item : ${page.lendableItems}" class="card item">
+          <div class="item-main">
+            <h3 class="item-name" th:text="${item.name}">Catan</h3>
+            <p class="item-meta">
+              <span class="tag" th:text="${item.category.label}">Board game</span>
+              <span th:if="${item.owner.id == page.me.user.id}" class="status status-off">Yours</span>
+              <span th:unless="${item.owner.id == page.me.user.id}" class="muted"
+                    th:text="'from ' + ${item.owner.displayName}">from Sam</span>
+            </p>
+            <p th:if="${item.description}" class="item-description" th:text="${item.description}">Base game.</p>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="section-title">Members <span class="count" th:text="${#lists.size(page.members)}">2</span></h2>
+      <ul class="member-list card">
+        <li th:each="m : ${page.members}">
+          <span th:text="${m.user.displayName}">Sam</span>
+          <span th:if="${m.user.id == page.me.user.id}" class="muted">(you)</span>
+          <span th:if="${m.owner}" class="tag">Owner</span>
+        </li>
+      </ul>
+    </section>
+
+    <form th:unless="${page.me.owner}" th:action="@{/groups/{id}/leave(id=${page.group.id})}" method="post"
+          th:attr="data-confirm='Leave ' + ${page.group.name} + '?'" class="leave">
+      <button type="submit" class="button button-danger">Leave group</button>
+    </form>
+  </main>
+  <script>
+    document.querySelectorAll("form[data-confirm]").forEach((form) =>
+      form.addEventListener("submit", (e) => {
+        if (!confirm(form.dataset.confirm)) e.preventDefault()
+      })
+    )
+    // Copies the invite link; if the clipboard isn't available, selects it for a manual copy.
+    document.querySelectorAll("[data-copy]").forEach((button) =>
+      button.addEventListener("click", async () => {
+        const input = document.getElementById(button.dataset.copy)
+        try {
+          await navigator.clipboard.writeText(input.value)
+          button.textContent = "Copied"
+          setTimeout(() => (button.textContent = "Copy"), 2000)
+        } catch {
+          input.select()
+        }
+      })
+    )
+  </script>
+</body>
+</html>

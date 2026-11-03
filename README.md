@@ -8,7 +8,7 @@ People keep asking online for an app that tracks what they own, what they want a
 
 ## Status
 
-**Milestone 1 of 3 is done:** accounts and your own list of items. Groups, borrow requests and reminders come next (see [Roadmap](#roadmap)).
+**Milestones 1 and 2a are done:** accounts, your own list of items, and groups with invite links. Borrow requests and reminders come next (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -17,6 +17,16 @@ People keep asking online for an app that tracks what they own, what they want a
   - Passwords need at least 10 characters with no composition rules (NIST SP 800-63B). They're stored as BCrypt hashes, and anything BCrypt would silently truncate (over 72 bytes) is rejected.
 - **My things:** add, edit and delete items with a name, category, optional description and a "friends can ask to borrow it" switch.
 - **Ownership is enforced on the server.** Every item query is scoped to the logged-in user, and someone else's item answers 404, so its existence isn't revealed.
+- **Groups** of friends:
+  - Create a group and share its **invite link**. It holds a random 256-bit token and expires after 7 days.
+  - The group page lists the members and everything they mark as lendable, with who owns it.
+  - Only members can see a group (others get 404). Only its creator manages the invite link: they can make a new one, which disables the old one at once.
+  - Members can leave a group. The creator can't, so a group always has someone who manages the link.
+- **Invite links are safe to paste into a chat.**
+  - Opening the link only asks "Join …?". Joining needs a POST, so a chat app's link preview can't add anyone.
+  - Someone logged out is sent to the login page (or sign-up) and then back to the invite.
+  - Following the link again doesn't create a second membership: there's a check, plus a unique constraint for two clicks at the same moment.
+  - Pages send `Referrer-Policy: same-origin`, so tokens in URLs never leak to other sites.
 - Server-rendered pages that work without JavaScript (JavaScript only adds a confirmation before deleting), in light and dark mode, and usable on a phone.
 
 ## Tech stack
@@ -64,8 +74,9 @@ Then set the variables from [.env.example](.env.example) and run the app as abov
 
 - `RegistrationTests`: sign-up, validation, duplicate emails, CSRF and login.
 - `ItemControllerTests`: creating, editing and deleting items, and that another user can't see or change them.
+- `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
-- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
+- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group queries. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
 
 ## Project structure
 
@@ -74,7 +85,8 @@ src/main/java/io/github/gallileee/lendloop/
   user/       account entity, sign-up form, validation and service
   security/   Spring Security config and the logged-in user (AppUserDetails)
   item/       items: entity, repository, service (ownership checks), controller
-  web/        home redirect and login page
+  group/      groups, membership, invite tokens, join flow
+  web/        home redirect, login page, top bar navigation
 src/main/resources/
   db/migration/   Flyway SQL migrations
   templates/      Thymeleaf pages
@@ -85,7 +97,10 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 ## Limitations
 
-- Items can't be shared yet: there are no groups or borrow requests (milestone 2).
+- Items in a group can be seen but not borrowed yet: borrow requests are milestone 2b.
+- Invite tokens are stored in plain text so the owner can see the link again. Anyone with read access to the database could use a link until it expires.
+- The invite expiry is shown in the server's time zone. Behind a reverse proxy, set `server.forward-headers-strategy=framework` so invite links use the public host and https.
+- Groups can't be renamed or deleted, and members can't be removed by the owner yet.
 - Sign-up says when an email is already registered, which reveals that the account exists. That's acceptable for an app between friends, but it should change before a public launch.
 - There's no password reset, email verification or rate limiting on login yet.
 - The UI is in English only.
@@ -93,7 +108,8 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 ## Roadmap
 
 1. ~~Accounts and your own items~~ (done)
-2. **Groups and loans:** invite link to a group; see the group's items; ask to borrow; the owner approves or declines and sets a due date; mark it returned. Loan states: requested → active → returned, or declined / cancelled.
+2. ~~**Groups:** invite link, membership, the group's lendable items~~ (done)
+   **Loans:** ask to borrow; the owner approves or declines and sets a due date; mark it returned. Loan states: requested → active → returned, or declined / cancelled.
 3. **Reminders:** a daily job emails borrowers about overdue loans (Mailpit locally); record a loan to someone outside the app; fill in book details from an ISBN via Open Library.
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 

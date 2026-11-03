@@ -9,7 +9,11 @@
 <body>
   <header th:fragment="topbar" class="topbar">
     <a class="brand" th:href="@{/items}">LendLoop</a>
-    <nav sec:authorize="isAuthenticated()" class="topbar-nav">
+    <nav sec:authorize="isAuthenticated()" class="topbar-links" aria-label="Main">
+      <a th:href="@{/items}" th:attr="aria-current=${section == 'items'} ? 'page' : null">My things</a>
+      <a th:href="@{/groups}" th:attr="aria-current=${section == 'groups'} ? 'page' : null">Groups</a>
+    </nav>
+    <nav sec:authorize="isAuthenticated()" class="topbar-nav" aria-label="Account">
       <span class="muted" th:text="${#authentication.principal.displayName()}">Alex</span>
       <form th:action="@{/logout}" method="post">
         <button type="submit" class="link-button">Log out</button>

@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Invite link not valid')}"></head>
+<body>
+  <header th:replace="~{fragments :: topbar}"></header>
+  <main class="narrow">
+    <h1>This invite link doesn't work</h1>
+    <p>It may have expired (links last 7 days), or the group's owner made a new one.
+       Ask them to send you the current link.</p>
+    <p><a class="button" th:href="@{/groups}">Go to my groups</a></p>
+  </main>
+</body>
+</html>

@@ -1,5 +1,43 @@
 # Progress log
 
+## 2026-11-03: Milestone 2a, groups with invite links
+
+Done:
+- Flyway `V2__groups.sql`:
+  - `app_group`: name, unique invite token, expiry.
+  - `group_member`: role OWNER / MEMBER, `unique (group_id, user_id)`.
+- `group` package:
+  - `AppGroup`, `GroupMember`, repositories (fetch joins, because open-in-view is off).
+  - `InviteTokens`: `SecureRandom`, 32 bytes, Base64url.
+  - `GroupService` with a `Clock` bean.
+  - `GroupController`, `JoinController`.
+- **Rules:**
+  - Only members see a group; anyone else gets 404.
+  - Only the owner sees and replaces the invite link; a member gets 403.
+  - The owner can't leave.
+  - Links expire after 7 days, and a new link disables the old one.
+- **Join flow:**
+  - `GET /join/{token}` only asks to confirm and `POST` joins, so link previews in chat apps can't join anyone.
+  - A logged-out user is taken through login and back. For that, `defaultSuccessUrl` no longer always goes to `/items`.
+  - Joining twice keeps one membership: a check, plus the unique constraint for a race. That race is handled in the controller, outside the transaction: a failed insert marks the transaction rollback-only, so catching the exception inside the `@Transactional` method would still fail at commit.
+- The group page lists the members' lendable items with the owner's name, the members, the invite link with a Copy button, *Make a new link* and *Leave group*.
+- Top bar navigation (*My things* / *Groups*) via a `@ControllerAdvice`, since Thymeleaf 3.1 no longer exposes `#request`.
+- `Referrer-Policy: same-origin` so tokens in URLs aren't sent to other sites.
+- Tests: `GroupTests` (11), `PostgresMigrationTest` extended with the group queries. 28 tests in total.
+
+Found in the browser: the invite expiry showed as "10 lis 2026" on a Czech browser (Thymeleaf formats with the request locale) in an otherwise English UI. It is now formatted in English in the controller.
+
+Verified locally:
+- `./mvnw test`: 26 passed, 2 skipped (PostgreSQL, no Docker).
+- In the browser (`spring-boot:run`):
+  - Creating a group shows the invite link and the owner's lendable item.
+  - Logging out and opening the link leads to login; the second account was registered and logged in, and came back to "Join Flat 4B?".
+  - Joining shows the group with *Catan · from Demo*, members Demo (Owner) and Friend, and *Leave group*.
+  - No horizontal overflow at 375 px.
+  - The fixed date reads "10 Nov 2026, 15:09".
+
+Not verified locally: the PostgreSQL tests (CI runs them). Screenshots timed out in this session, so the phone layout was checked by measuring overflow, not by looking.
+
 ## 2026-11-03: Milestone 1, accounts and own items
 
 Why this project: a search for apps people ask for found a gap. Lending trackers exist only as single-user iPhone apps, and the one open-source app (Lendix) is archived. An HN commenter asked for a library of owned / wanted / lendable things. The owner approved the proposal and a public repo `Gallileee/lendloop`.
@@ -34,11 +72,11 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. **Groups:** create a group, invite link with a random token (expiry), join, list members. Only members see the group's items.
-2. **Loans:** `loan` table and a state machine (requested → active → returned; declined; cancelled) in one service with tests for every allowed and forbidden transition; only the owner approves, only the borrower cancels; an item can have at most one active loan (DB constraint).
-3. Overdue reminders: `@Scheduled` daily job + email (Spring Mail, Mailpit in compose).
-4. Loan to someone outside the app (just a name).
-5. ISBN lookup via Open Library for books.
-6. Login rate limiting, password reset by email.
-7. Czech translation (`messages_cs.properties`).
+1. **Loans:** `loan` table and a state machine (requested → active → returned; declined; cancelled) in one service with tests for every allowed and forbidden transition; only the owner approves, only the borrower cancels; an item can have at most one active loan (DB constraint).
+2. Overdue reminders: `@Scheduled` daily job + email (Spring Mail, Mailpit in compose).
+3. Loan to someone outside the app (just a name).
+4. ISBN lookup via Open Library for books.
+5. Login rate limiting, password reset by email.
+6. Czech translation (`messages_cs.properties`).
+7. Group management: rename, delete, owner removes a member, hand over ownership.
 8. Deployment on a free tier.
