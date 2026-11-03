@@ -1,5 +1,33 @@
 # Progress log
 
+## 2026-11-03: Milestone 3a, due-date reminders by email
+
+Done:
+- `spring-boot-starter-mail`; Flyway `V4__loan_reminders.sql` adds `loan.last_reminder_on`.
+- `Loan.reminderDueOn(today)` decides which email is due, as a pure method like the other loan rules:
+  - the day before the due date: `DUE_TOMORROW`;
+  - the first overdue day, then every 7 days: `OVERDUE`;
+  - nothing if a reminder already went out today, or the loan isn't active.
+- `LoanReminderJob`: `@Scheduled` (cron from `lendloop.reminders.cron`, default 08:00, `-` disables it; `@EnableScheduling` on the app).
+  - Loads active loans due by tomorrow (one fetch-join query), sends, then records the day with an `update` that only touches `last_reminder_on`, so it can't overwrite a "returned" made meanwhile.
+  - A `MailException` is logged and not recorded, so it's retried next run; the other loans still get theirs.
+- `ReminderMailer`: plain-text emails with a link to `/loans` (`lendloop.base-url`).
+  - Uses `ObjectProvider<JavaMailSender>`: Spring Boot only creates a sender when `spring.mail.host` is set; without one the email is logged. So the zero-setup local run still works.
+  - Control characters in item and user names are replaced by spaces, so a name can't add mail headers.
+- Mailpit (`axllent/mailpit:v1.33`) in `compose.yaml`; mail variables in `.env.example` and the README.
+- Tests: `LoanTest` +2 (7 cases), `LoanReminderTests` (5, mocked `JavaMailSender`), `PostgresMigrationTest` checks the new query and update on PostgreSQL.
+
+Trade-offs:
+- A reminder is recorded even when mail isn't configured and it only went to the log, so configuring mail later doesn't send a backlog.
+- "Due tomorrow" can arrive on the day the loan was approved if the due date is tomorrow.
+- One app instance assumed (no distributed lock such as ShedLock).
+
+Verified locally:
+- `./mvnw test`: 62 passed, 3 skipped (PostgreSQL, no Docker; CI runs them).
+- Packaged jar on port 8092 with the cron set to every 15 s and a demo loan due tomorrow in the local H2 database: Flyway applied V4, the first run logged the "“Catan” is due back tomorrow" email to Friend with the link, and the next run sent 0. The demo loan row was deleted afterwards.
+
+Not verified locally: sending through a real SMTP server / Mailpit (no Docker here). The mail path is covered by the mocked `JavaMailSender` tests only.
+
 ## 2026-11-03: All HTTP tests run without a test transaction
 
 Follow-up to the `LazyInitializationException` found in milestone 2b.
@@ -128,7 +156,7 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Overdue reminders: `@Scheduled` daily job + email (Spring Mail, Mailpit in compose).
+1. Reminder settings: a "Settings" page where users turn reminder emails off (`app_user.email_reminders`), and the owner gets a copy when a loan becomes overdue.
 2. Loan to someone outside the app (just a name).
 3. ISBN lookup via Open Library for books.
 4. Login rate limiting, password reset by email.

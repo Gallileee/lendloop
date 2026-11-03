@@ -1,0 +1,151 @@
+package io.github.gallileee.lendloop.loan;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
+import io.github.gallileee.lendloop.WebTest;
+import io.github.gallileee.lendloop.item.Category;
+import io.github.gallileee.lendloop.item.Item;
+import io.github.gallileee.lendloop.item.ItemRepository;
+import io.github.gallileee.lendloop.user.AppUser;
+import io.github.gallileee.lendloop.user.AppUserRepository;
+import java.time.Instant;
+import java.time.LocalDate;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.MailSendException;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+// The daily job against the database, with a mock mail server. Extends WebTest only for the
+// table cleanup: like production, the job runs without a surrounding transaction.
+class LoanReminderTests extends WebTest {
+
+	private static final Instant NOW = Instant.parse("2026-11-03T12:00:00Z");
+	private static final LocalDate DUE = LocalDate.parse("2026-11-17");
+
+	@MockitoBean
+	JavaMailSender mailSender;
+
+	@Autowired
+	LoanReminderJob job;
+
+	@Autowired
+	AppUserRepository users;
+
+	@Autowired
+	ItemRepository items;
+
+	@Autowired
+	LoanRepository loans;
+
+	AppUser alex;
+	AppUser sam;
+	Loan catan;
+
+	@BeforeEach
+	void setUp() {
+		alex = users.save(new AppUser("alex@example.com", "Alex", "{noop}x"));
+		sam = users.save(new AppUser("sam@example.com", "Sam", "{noop}x"));
+		catan = lend(items.save(new Item(alex, "Catan", null, Category.GAME, true)), sam, DUE);
+	}
+
+	private Loan lend(Item item, AppUser borrower, LocalDate due) {
+		Loan loan = new Loan(item, borrower, null, NOW);
+		loan.approve(due, NOW);
+		return loans.save(loan);
+	}
+
+	private SimpleMailMessage onlyMail() {
+		ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
+		verify(mailSender).send(mail.capture());
+		clearInvocations(mailSender);
+		return mail.getValue();
+	}
+
+	@Test
+	void theBorrowerHearsTheDayBeforeTheDueDate() {
+		assertThat(job.sendReminders(DUE.minusDays(2))).isZero();
+		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+
+		assertThat(job.sendReminders(DUE.minusDays(1))).isOne();
+		SimpleMailMessage mail = onlyMail();
+		assertThat(mail.getTo()).containsExactly("sam@example.com");
+		assertThat(mail.getFrom()).isEqualTo("Lendloop <no-reply@lendloop.test>");
+		assertThat(mail.getSubject()).isEqualTo("“Catan” is due back tomorrow");
+		assertThat(mail.getText())
+			.startsWith("Hi Sam,")
+			.contains("“Catan”, which you borrowed from Alex, is due back tomorrow, 17 Nov 2026.")
+			.contains("https://lendloop.test/loans");
+		assertThat(loans.findById(catan.getId()).orElseThrow().getLastReminderOn()).isEqualTo(DUE.minusDays(1));
+
+		// A second run on the same day (e.g. after a restart) sends nothing.
+		assertThat(job.sendReminders(DUE.minusDays(1))).isZero();
+		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+	}
+
+	@Test
+	void anOverdueLoanIsRemindedOnTheFirstDayThenWeekly() {
+		job.sendReminders(DUE.minusDays(1));
+		onlyMail();
+
+		assertThat(job.sendReminders(DUE)).as("the due date itself").isZero();
+
+		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
+		SimpleMailMessage mail = onlyMail();
+		assertThat(mail.getSubject()).isEqualTo("“Catan” was due back on 17 Nov 2026");
+		assertThat(mail.getText()).contains("was due back on 17 Nov 2026 (1 day ago). Please give it back to Alex");
+
+		for (int day = 2; day <= 7; day++) {
+			assertThat(job.sendReminders(DUE.plusDays(day))).as("day %d after the due date", day).isZero();
+		}
+		assertThat(job.sendReminders(DUE.plusDays(8))).isOne();
+		assertThat(onlyMail().getText()).contains("(8 days ago)");
+	}
+
+	@Test
+	void returnedLoansAndRequestsGetNothing() {
+		Loan loan = loans.findById(catan.getId()).orElseThrow();
+		loan.markReturned(NOW);
+		loans.save(loan);
+		Item book = items.save(new Item(alex, "Dune", null, Category.BOOK, true));
+		loans.save(new Loan(book, sam, null, NOW)); // still a request, no due date
+
+		assertThat(job.sendReminders(DUE.minusDays(1))).isZero();
+		assertThat(job.sendReminders(DUE.plusDays(1))).isZero();
+		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+	}
+
+	@Test
+	void aFailedEmailIsRetriedNextTimeAndDoesNotStopTheOthers() {
+		Item book = items.save(new Item(alex, "Dune", null, Category.BOOK, true));
+		Loan dune = lend(book, sam, DUE);
+		doThrow(new MailSendException("SMTP server down")).when(mailSender)
+			.send(argThat((SimpleMailMessage m) -> m.getSubject().contains("Catan")));
+
+		assertThat(job.sendReminders(DUE.minusDays(1))).isOne();
+		verify(mailSender, times(2)).send(any(SimpleMailMessage.class));
+		assertThat(loans.findById(catan.getId()).orElseThrow().getLastReminderOn()).isNull();
+		assertThat(loans.findById(dune.getId()).orElseThrow().getLastReminderOn()).isEqualTo(DUE.minusDays(1));
+	}
+
+	@Test
+	void namesCannotAddMailHeaders() {
+		Item sneaky = items.save(new Item(alex, "Catan\r\nBcc: everyone@example.com", null, Category.GAME, true));
+		lend(sneaky, sam, DUE.minusDays(5)); // Catan is not due yet that day
+
+		job.sendReminders(DUE.minusDays(6));
+		SimpleMailMessage mail = onlyMail();
+		assertThat(mail.getSubject()).isEqualTo("“Catan Bcc: everyone@example.com” is due back tomorrow");
+		assertThat(mail.getBcc()).isNull();
+	}
+}

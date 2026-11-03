@@ -106,6 +106,26 @@ class LoanTest {
 			.containsExactlyInAnyOrder(LoanStatus.REQUESTED, LoanStatus.ACTIVE);
 	}
 
+	@Test
+	void theDayBeforeTheDueDateGetsADueTomorrowReminder() {
+		Loan loan = loanIn(LoanStatus.ACTIVE); // due in 14 days
+		LocalDate due = TODAY.plusDays(14);
+		assertThat(loan.reminderDueOn(due.minusDays(2))).isEmpty();
+		assertThat(loan.reminderDueOn(due.minusDays(1))).contains(ReminderKind.DUE_TOMORROW);
+		assertThat(loan.reminderDueOn(due)).isEmpty();
+		assertThat(loan.reminderDueOn(due.plusDays(1))).contains(ReminderKind.OVERDUE);
+		// Never reminded, so any overdue day qualifies (e.g. the app was down for a while).
+		assertThat(loan.reminderDueOn(due.plusDays(5))).contains(ReminderKind.OVERDUE);
+	}
+
+	@ParameterizedTest
+	@EnumSource(value = LoanStatus.class, names = "ACTIVE", mode = EnumSource.Mode.EXCLUDE)
+	void onlyActiveLoansGetReminders(LoanStatus status) {
+		Loan loan = loanIn(status);
+		assertThat(loan.reminderDueOn(TODAY.plusDays(13))).isEmpty();
+		assertThat(loan.reminderDueOn(TODAY.plusDays(20))).isEmpty();
+	}
+
 	private static void assertRefused(LoanStatus status, Consumer<Loan> action) {
 		Loan loan = loanIn(status);
 		assertThatThrownBy(() -> action.accept(loan)).isInstanceOf(LoanRuleException.class);

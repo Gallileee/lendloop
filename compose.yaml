@@ -1,6 +1,7 @@
 # Optional: a local PostgreSQL instead of the default H2 file database.
 #   docker compose up -d
 #   then run the app with the variables from .env.example
+# Also a local mail catcher (Mailpit) for the due-date reminder emails.
 services:
   postgres:
     image: postgres:17-alpine
@@ -12,6 +13,13 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - lendloop-db:/var/lib/postgresql/data
+
+  # Catches every email the app sends; read them at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.33
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
 volumes:
   lendloop-db:

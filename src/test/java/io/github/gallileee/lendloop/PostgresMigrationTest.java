@@ -48,7 +48,7 @@ class PostgresMigrationTest {
 	@Autowired
 	LoanRepository loans;
 
-	// The loan queries (nulls last, limit) and the uniqueness constraints on PostgreSQL.
+	// The loan queries (nulls last, limit, reminders) and the uniqueness constraints on PostgreSQL.
 	@Test
 	void loansWorkOnPostgres() {
 		AppUser owner = users.save(new AppUser("pg-lender@example.com", "Lender", "{noop}irrelevant"));
@@ -69,6 +69,13 @@ class PostgresMigrationTest {
 		loanService.approve(loan.getId(), owner.getId(), LocalDate.now().plusDays(7));
 		assertThat(loanService.overview(owner.getId()).lentOut()).extracting(Loan::getId).containsExactly(loan.getId());
 		assertThat(loanService.overview(owner.getId()).incomingRequests()).hasSize(1);
+
+		// The reminder job's query and its update of the V4 column.
+		LocalDate due = loans.findById(loan.getId()).orElseThrow().getDueDate();
+		assertThat(loans.findActiveDueBy(due)).extracting(Loan::getId).containsExactly(loan.getId());
+		assertThat(loans.findActiveDueBy(due.minusDays(1))).isEmpty();
+		loans.recordReminder(loan.getId(), due.minusDays(1));
+		assertThat(loans.findById(loan.getId()).orElseThrow().getLastReminderOn()).isEqualTo(due.minusDays(1));
 
 		// Approving the second request directly in the entity, bypassing the service's check,
 		// must still be refused by the unique constraint.
