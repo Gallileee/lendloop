@@ -8,7 +8,7 @@ People keep asking online for an app that tracks what they own, what they want a
 
 ## Status
 
-**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, and email reminders about due dates. Loans to people outside the app come next (see [Roadmap](#roadmap)).
+**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, email reminders about due dates, and a Settings page to choose which emails you get. Loans to people outside the app come next (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -38,8 +38,11 @@ People keep asking online for an app that tracks what they own, what they want a
 - **Due-date reminders by email.** A daily job (8:00 by default) emails the borrower:
   - the day before the due date ("“Catan” is due back tomorrow");
   - on the first day a loan is overdue, then once a week until it's returned.
+  - The owner gets one email on the first overdue day too ("“Catan” is overdue at Sam"), not the weekly ones.
   - Each email is recorded on the loan as it's sent, so a second run or a restart the same day sends nothing twice. A failed email is retried on the next run and doesn't stop the others.
   - Without a mail server configured, the emails are written to the log instead, so the app still runs with zero setup. `docker compose up -d` starts [Mailpit](https://mailpit.axllent.org/), which catches them at http://localhost:8025.
+- **Settings** (click your name in the top bar): change your name, and turn each kind of email on or off (reminders about things you borrowed; notices about things you lent out). Both are on by default, and every email links to this page.
+  - A new name shows in the top bar at once: the logged-in principal in the session is replaced on save.
 - **The loan rules are a small state machine:** `REQUESTED -> ACTIVE -> RETURNED`, or `REQUESTED -> DECLINED / CANCELLED`.
   - The `Loan` entity refuses every other change.
   - The database also guarantees one active loan per item and one open request per person and item, even when two requests race.
@@ -98,7 +101,8 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `ItemControllerTests`: creating, editing and deleting items, and that another user can't see or change them.
 - `LoanTest`: the loan state machine on its own, including every forbidden transition (parameterized), with no Spring or database.
 - `LoanFlowTests`: the whole loan flow over HTTP, who may do what, due-date limits, one person at a time, overdue display, and no deleting lent-out items. (See PROGRESS.md for the bug that led to `WebTest`.)
-- `LoanReminderTests`: the reminder job against the database with a mocked `JavaMailSender`: the "due tomorrow" email and its text, no second email on the same day, overdue on the first day and then weekly, nothing for returned loans or requests, a failed email retried without blocking the others, and no header injection through item names.
+- `LoanReminderTests`: the reminder job against the database with a mocked `JavaMailSender`: the "due tomorrow" email and its text, no second email on the same day, overdue on the first day and then weekly, the owner's one-off overdue notice, users who turned emails off, nothing for returned loans or requests, a failed email retried without blocking the others, and no header injection through item names.
+- `SettingsTests`: the Settings page needs a login, shows both emails on for a new account, saves the name and unticked boxes, refreshes the name in the session, and refuses a blank name.
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
@@ -108,7 +112,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 
 ```
 src/main/java/io/github/gallileee/lendloop/
-  user/       account entity, sign-up form, validation and service
+  user/       account entity, sign-up and settings forms, validation and services
   security/   Spring Security config and the logged-in user (AppUserDetails)
   item/       items: entity, repository, service (ownership checks), controller
   group/      groups, membership, invite tokens, join flow
@@ -124,7 +128,9 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 ## Limitations
 
-- Only due dates are emailed. New requests and answers are only visible in the app, and there's no way to turn reminders off yet.
+- Only due dates are emailed. New requests and answers are only visible in the app.
+- If the owner's overdue email fails, it isn't retried (retrying would remind the borrower twice).
+- Emails have no one-click unsubscribe header (RFC 8058); turning them off needs a login.
 - The reminder job assumes one running instance of the app; two instances would both send.
 - "Today" and due dates use the server's time zone.
 - Only the owner can mark a loan as returned. If they forget, it stays lent out.
@@ -139,7 +145,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); record a loan to someone outside the app; fill in book details from an ISBN via Open Library.
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); record a loan to someone outside the app; fill in book details from an ISBN via Open Library.
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).

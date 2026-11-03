@@ -9,9 +9,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 // Once a day, emails borrowers whose loan is due tomorrow or overdue (rules in
-// Loan.reminderDueOn). Each sent email is recorded on the loan right away, so a crash halfway
-// through or a second run the same day doesn't send it twice. A failed email is not recorded
-// and is tried again on the next run; the other loans still get theirs.
+// Loan.reminderDueOn), and owners on the first day their item is overdue (Loan.ownerNoticeDueOn).
+// Each user chooses which of these they get on the Settings page.
+//
+// Each handled loan is recorded right away, so a crash halfway through or a second run the
+// same day doesn't send it twice. A failed borrower email is not recorded and is tried again
+// on the next run; the other loans still get theirs. A failed owner email is only logged:
+// retrying it would send the borrower's reminder twice.
 //
 // Assumes one running instance of the app: two instances would both send.
 @Component
@@ -43,17 +47,29 @@ class LoanReminderJob {
 			if (kind == null) {
 				continue;
 			}
-			try {
-				mailer.send(loan, kind, today);
+			if (loan.getBorrower().isRemindBorrowed()) {
+				try {
+					mailer.send(loan, kind, today);
+					sent++;
+				}
+				catch (MailException ex) {
+					log.warn("Could not send the {} reminder for loan {}: {}", kind, loan.getId(), ex.getMessage());
+					continue;
+				}
 			}
-			catch (MailException ex) {
-				log.warn("Could not send the {} reminder for loan {}: {}", kind, loan.getId(), ex.getMessage());
-				continue;
+			if (loan.ownerNoticeDueOn(today) && loan.getItem().getOwner().isNotifyLentOverdue()) {
+				try {
+					mailer.sendOwnerNotice(loan, today);
+					sent++;
+				}
+				catch (MailException ex) {
+					log.warn("Could not tell the owner that loan {} is overdue: {}", loan.getId(), ex.getMessage());
+				}
 			}
+			// Recorded even if nobody wanted an email, so the owner notice stays a one-off.
 			loans.recordReminder(loan.getId(), today);
-			sent++;
 		}
-		log.info("Sent {} loan reminder(s) for {}", sent, today);
+		log.info("Sent {} loan email(s) for {}", sent, today);
 		return sent;
 	}
 }

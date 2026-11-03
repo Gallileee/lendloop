@@ -132,6 +132,13 @@ public class Loan {
 		return Optional.empty();
 	}
 
+	// Whether the owner should hear today that the loan is overdue: once, with the borrower's
+	// first overdue reminder, not with the weekly ones after it.
+	public boolean ownerNoticeDueOn(LocalDate today) {
+		boolean firstOverdueReminder = lastReminderOn == null || !lastReminderOn.isAfter(dueDate);
+		return reminderDueOn(today).filter(ReminderKind.OVERDUE::equals).isPresent() && firstOverdueReminder;
+	}
+
 	private void requireStatus(LoanStatus expected, String userMessage) {
 		if (status != expected) {
 			throw new LoanRuleException(userMessage);

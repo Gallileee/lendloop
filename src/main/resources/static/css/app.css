@@ -91,7 +91,9 @@ input, select, textarea {
   color: var(--text);
 }
 
-.checkbox input { width: 20px; height: 20px; }
+.checkbox input { width: 20px; height: 20px; flex-shrink: 0; }
+.settings-group { display: grid; gap: 12px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.settings-group legend { font-weight: 600; padding: 0; margin-bottom: 8px; }
 input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--danger); }
 input:focus-visible, select:focus-visible, textarea:focus-visible, .button:focus-visible {
   outline: 2px solid var(--accent);

@@ -17,6 +17,7 @@ import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.AppUserRepository;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -72,6 +73,19 @@ class LoanReminderTests extends WebTest {
 		return mail.getValue();
 	}
 
+	private List<SimpleMailMessage> allMail(int count) {
+		ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
+		verify(mailSender, times(count)).send(mail.capture());
+		clearInvocations(mailSender);
+		return mail.getAllValues();
+	}
+
+	private void changeSettings(AppUser user, boolean remindBorrowed, boolean notifyLentOverdue) {
+		AppUser saved = users.findById(user.getId()).orElseThrow();
+		saved.changeSettings(saved.getDisplayName(), remindBorrowed, notifyLentOverdue);
+		users.save(saved);
+	}
+
 	@Test
 	void theBorrowerHearsTheDayBeforeTheDueDate() {
 		assertThat(job.sendReminders(DUE.minusDays(2))).isZero();
@@ -85,7 +99,8 @@ class LoanReminderTests extends WebTest {
 		assertThat(mail.getText())
 			.startsWith("Hi Sam,")
 			.contains("“Catan”, which you borrowed from Alex, is due back tomorrow, 17 Nov 2026.")
-			.contains("https://lendloop.test/loans");
+			.contains("https://lendloop.test/loans")
+			.contains("Turn them off in your settings: https://lendloop.test/settings");
 		assertThat(loans.findById(catan.getId()).orElseThrow().getLastReminderOn()).isEqualTo(DUE.minusDays(1));
 
 		// A second run on the same day (e.g. after a restart) sends nothing.
@@ -100,16 +115,62 @@ class LoanReminderTests extends WebTest {
 
 		assertThat(job.sendReminders(DUE)).as("the due date itself").isZero();
 
-		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
-		SimpleMailMessage mail = onlyMail();
-		assertThat(mail.getSubject()).isEqualTo("“Catan” was due back on 17 Nov 2026");
-		assertThat(mail.getText()).contains("was due back on 17 Nov 2026 (1 day ago). Please give it back to Alex");
+		assertThat(job.sendReminders(DUE.plusDays(1))).as("borrower and owner").isEqualTo(2);
+		List<SimpleMailMessage> mails = allMail(2);
+		SimpleMailMessage toSam = mails.get(0);
+		assertThat(toSam.getTo()).containsExactly("sam@example.com");
+		assertThat(toSam.getSubject()).isEqualTo("“Catan” was due back on 17 Nov 2026");
+		assertThat(toSam.getText()).contains("was due back on 17 Nov 2026 (1 day ago). Please give it back to Alex");
+		SimpleMailMessage toAlex = mails.get(1);
+		assertThat(toAlex.getTo()).containsExactly("alex@example.com");
+		assertThat(toAlex.getSubject()).isEqualTo("“Catan” is overdue at Sam");
+		assertThat(toAlex.getText())
+			.startsWith("Hi Alex,")
+			.contains("“Catan”, which you lent to Sam, was due back on 17 Nov 2026 (1 day ago).")
+			.contains("https://lendloop.test/settings");
 
 		for (int day = 2; day <= 7; day++) {
 			assertThat(job.sendReminders(DUE.plusDays(day))).as("day %d after the due date", day).isZero();
 		}
+		// The weekly reminder goes to the borrower only; the owner heard once.
 		assertThat(job.sendReminders(DUE.plusDays(8))).isOne();
-		assertThat(onlyMail().getText()).contains("(8 days ago)");
+		SimpleMailMessage weekly = onlyMail();
+		assertThat(weekly.getTo()).containsExactly("sam@example.com");
+		assertThat(weekly.getText()).contains("(8 days ago)");
+	}
+
+	@Test
+	void aBorrowerWhoTurnedRemindersOffGetsNoneButTheOwnerIsStillTold() {
+		changeSettings(sam, false, true);
+
+		assertThat(job.sendReminders(DUE.minusDays(1))).isZero();
+		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+
+		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
+		assertThat(onlyMail().getTo()).containsExactly("alex@example.com");
+		assertThat(loans.findById(catan.getId()).orElseThrow().getLastReminderOn()).isEqualTo(DUE.plusDays(1));
+
+		assertThat(job.sendReminders(DUE.plusDays(8))).as("no repeat for the owner").isZero();
+	}
+
+	@Test
+	void anOwnerWhoTurnedNoticesOffIsNotTold() {
+		changeSettings(alex, true, false);
+
+		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
+		assertThat(onlyMail().getTo()).containsExactly("sam@example.com");
+	}
+
+	@Test
+	void aFailedOwnerNoticeIsNotRetriedSoTheBorrowerIsNotRemindedTwice() {
+		doThrow(new MailSendException("SMTP server down")).when(mailSender)
+			.send(argThat((SimpleMailMessage m) -> m.getTo()[0].equals("alex@example.com")));
+
+		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
+		allMail(2);
+		assertThat(loans.findById(catan.getId()).orElseThrow().getLastReminderOn()).isEqualTo(DUE.plusDays(1));
+
+		assertThat(job.sendReminders(DUE.plusDays(2))).isZero();
 	}
 
 	@Test
