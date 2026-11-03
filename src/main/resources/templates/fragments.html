@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:fragment="head(title)">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${title} + ' · LendLoop'">LendLoop</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+  <header th:fragment="topbar" class="topbar">
+    <a class="brand" th:href="@{/items}">LendLoop</a>
+    <nav sec:authorize="isAuthenticated()" class="topbar-nav">
+      <span class="muted" th:text="${#authentication.principal.displayName()}">Alex</span>
+      <form th:action="@{/logout}" method="post">
+        <button type="submit" class="link-button">Log out</button>
+      </form>
+    </nav>
+  </header>
+</body>
+</html>

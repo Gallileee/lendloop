@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${itemId} ? 'Edit item' : 'Add item')}"></head>
+<body>
+  <header th:replace="~{fragments :: topbar}"></header>
+  <main class="narrow">
+    <h1 th:text="${itemId} ? 'Edit item' : 'Add item'">Add item</h1>
+
+    <form th:action="${itemId} ? @{/items/{id}(id=${itemId})} : @{/items}" th:object="${form}"
+          method="post" class="card form" novalidate>
+      <label>Name
+        <input type="text" th:field="*{name}" maxlength="100" required autofocus
+               th:attr="aria-invalid=${#fields.hasErrors('name')}">
+        <span class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></span>
+      </label>
+      <label>Category
+        <select th:field="*{category}">
+          <option th:each="c : ${categories}" th:value="${c}" th:text="${c.label}">Book</option>
+        </select>
+        <span class="field-error" th:if="${#fields.hasErrors('category')}" th:errors="*{category}"></span>
+      </label>
+      <label>Description <span class="muted">(optional)</span>
+        <textarea th:field="*{description}" rows="3" maxlength="1000"
+                  th:attr="aria-invalid=${#fields.hasErrors('description')}"></textarea>
+        <span class="hint">Edition, size, condition, what's in the box.</span>
+        <span class="field-error" th:if="${#fields.hasErrors('description')}" th:errors="*{description}"></span>
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" th:field="*{available}">
+        Friends can ask to borrow it
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="button" th:text="${itemId} ? 'Save' : 'Add item'">Add item</button>
+        <a class="button button-secondary" th:href="@{/items}">Cancel</a>
+      </div>
+    </form>
+  </main>
+</body>
+</html>
