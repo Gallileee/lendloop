@@ -1,0 +1,17 @@
+# Optional: a local PostgreSQL instead of the default H2 file database.
+#   docker compose up -d
+#   then run the app with the variables from .env.example
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: lendloop
+      POSTGRES_USER: lendloop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lendloop-local}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - lendloop-db:/var/lib/postgresql/data
+
+volumes:
+  lendloop-db:

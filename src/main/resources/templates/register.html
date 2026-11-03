@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Create an account')}"></head>
+<body>
+  <header th:replace="~{fragments :: topbar}"></header>
+  <main class="narrow">
+    <h1>Create an account</h1>
+
+    <form th:action="@{/register}" th:object="${form}" method="post" class="card form" novalidate>
+      <label>Email
+        <input type="email" th:field="*{email}" autocomplete="email" required
+               th:attr="aria-invalid=${#fields.hasErrors('email')}">
+        <span class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></span>
+      </label>
+      <label>Your name
+        <input type="text" th:field="*{displayName}" autocomplete="nickname" maxlength="60" required
+               th:attr="aria-invalid=${#fields.hasErrors('displayName')}">
+        <span class="hint">Shown to your friends.</span>
+        <span class="field-error" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}"></span>
+      </label>
+      <label>Password
+        <input type="password" th:field="*{password}" autocomplete="new-password" minlength="10" required
+               th:attr="aria-invalid=${#fields.hasErrors('password') or #fields.hasErrors('passwordShortEnough')}">
+        <span class="hint">At least 10 characters. A few random words work well.</span>
+        <span class="field-error" th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></span>
+        <span class="field-error" th:if="${#fields.hasErrors('passwordShortEnough')}" th:errors="*{passwordShortEnough}"></span>
+      </label>
+      <label>Repeat password
+        <input type="password" th:field="*{confirmPassword}" autocomplete="new-password" required
+               th:attr="aria-invalid=${#fields.hasErrors('passwordConfirmed')}">
+        <span class="field-error" th:if="${#fields.hasErrors('passwordConfirmed')}" th:errors="*{passwordConfirmed}"></span>
+      </label>
+      <button type="submit" class="button">Create account</button>
+    </form>
+    <p>Already have an account? <a th:href="@{/login}">Log in</a></p>
+  </main>
+</body>
+</html>
