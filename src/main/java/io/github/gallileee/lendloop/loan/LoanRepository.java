@@ -1,10 +1,13 @@
 package io.github.gallileee.lendloop.loan;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.transaction.annotation.Transactional;
 
 // The fetch joins load what the pages show, because they render after the transaction
 // has ended (open-in-view is off).
@@ -46,6 +49,21 @@ public interface LoanRepository extends JpaRepository<Loan, Long> {
 	boolean existsByItemIdAndStatus(Long itemId, LoanStatus status);
 
 	boolean existsByItemIdAndBorrowerIdAndStatus(Long itemId, Long borrowerId, LoanStatus status);
+
+	// Active loans that may need a reminder: due by the given day (tomorrow) or earlier.
+	// Loan.reminderDueOn decides which of them actually get one.
+	@Query("""
+			select l from Loan l join fetch l.item i join fetch i.owner join fetch l.borrower
+			where l.status = 'ACTIVE' and l.dueDate <= :dueBy
+			order by l.dueDate, l.id""")
+	List<Loan> findActiveDueBy(LocalDate dueBy);
+
+	// Only touches the reminder column, so it can't overwrite a status change (e.g. "returned")
+	// made while the email was being sent.
+	@Transactional
+	@Modifying
+	@Query("update Loan l set l.lastReminderOn = :day where l.id = :id")
+	void recordReminder(Long id, LocalDate day);
 
 	@Query("select count(l) from Loan l where l.item.owner.id = :ownerId and l.status = 'REQUESTED'")
 	long countOpenRequestsFor(Long ownerId);

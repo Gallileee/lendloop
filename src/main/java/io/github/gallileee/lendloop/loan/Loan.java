@@ -14,12 +14,15 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Optional;
 
 // One request to borrow one item, and what became of it. The status only changes through
 // the transition methods below, each of which checks that it is allowed from the current
 // status. Who may call which one (owner or borrower) is checked in LoanService.
 @Entity
 public class Loan {
+
+	static final int OVERDUE_REMINDER_DAYS = 7;
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -50,6 +53,9 @@ public class Loan {
 
 	@Column(name = "returned_at")
 	private Instant returnedAt;
+
+	@Column(name = "last_reminder_on")
+	private LocalDate lastReminderOn;
 
 	// Copies of the ids that back the database's uniqueness rules (see V3__loans.sql).
 	// Kept in sync with the status by syncUniquenessKeys(); never read by the app.
@@ -104,6 +110,28 @@ public class Loan {
 		return status == LoanStatus.ACTIVE && dueDate.isBefore(today);
 	}
 
+	// Which email the borrower should get today, if any:
+	//   the day before the due date: "due tomorrow";
+	//   the first day it's overdue, then every OVERDUE_REMINDER_DAYS days: "overdue".
+	// lastReminderOn makes a second run on the same day send nothing.
+	public Optional<ReminderKind> reminderDueOn(LocalDate today) {
+		if (status != LoanStatus.ACTIVE || today.equals(lastReminderOn)) {
+			return Optional.empty();
+		}
+		if (today.equals(dueDate.minusDays(1))) {
+			return Optional.of(ReminderKind.DUE_TOMORROW);
+		}
+		if (isOverdueOn(today)) {
+			boolean remindedSinceOverdue = lastReminderOn != null && lastReminderOn.isAfter(dueDate);
+			boolean weekPassed = lastReminderOn != null
+					&& !lastReminderOn.isAfter(today.minusDays(OVERDUE_REMINDER_DAYS));
+			if (!remindedSinceOverdue || weekPassed) {
+				return Optional.of(ReminderKind.OVERDUE);
+			}
+		}
+		return Optional.empty();
+	}
+
 	private void requireStatus(LoanStatus expected, String userMessage) {
 		if (status != expected) {
 			throw new LoanRuleException(userMessage);
@@ -156,5 +184,9 @@ public class Loan {
 
 	public Instant getReturnedAt() {
 		return returnedAt;
+	}
+
+	public LocalDate getLastReminderOn() {
+		return lastReminderOn;
 	}
 }

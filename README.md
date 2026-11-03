@@ -8,7 +8,7 @@ People keep asking online for an app that tracks what they own, what they want a
 
 ## Status
 
-**Milestones 1 and 2 are done:** accounts, your own items, groups with invite links, and loans from request to return. Reminders come next (see [Roadmap](#roadmap)).
+**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, and email reminders about due dates. Loans to people outside the app come next (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -35,6 +35,11 @@ People keep asking online for an app that tracks what they own, what they want a
   - Loans past their date say "Overdue since ..." in words, not just in colour.
   - My things shows "Lent to Sam, Due 17 Nov 2026". A lent-out item can't be deleted.
   - Who may do what is enforced on the server. Only the owner answers and confirms the return, and only the borrower withdraws; anyone else gets 404. You can only ask people you share a group with.
+- **Due-date reminders by email.** A daily job (8:00 by default) emails the borrower:
+  - the day before the due date ("“Catan” is due back tomorrow");
+  - on the first day a loan is overdue, then once a week until it's returned.
+  - Each email is recorded on the loan as it's sent, so a second run or a restart the same day sends nothing twice. A failed email is retried on the next run and doesn't stop the others.
+  - Without a mail server configured, the emails are written to the log instead, so the app still runs with zero setup. `docker compose up -d` starts [Mailpit](https://mailpit.axllent.org/), which catches them at http://localhost:8025.
 - **The loan rules are a small state machine:** `REQUESTED -> ACTIVE -> RETURNED`, or `REQUESTED -> DECLINED / CANCELLED`.
   - The `Loan` entity refuses every other change.
   - The database also guarantees one active loan per item and one open request per person and item, even when two requests race.
@@ -68,8 +73,12 @@ Open http://localhost:8080, create an account and add some things. Data is kept 
 | `PORT` | `8080` | HTTP port |
 | `SPRING_DATASOURCE_URL` | H2 file in `./data` | JDBC URL, e.g. `jdbc:postgresql://localhost:5432/lendloop` |
 | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `sa` / empty | Database credentials |
+| `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | not set | SMTP server for reminder emails (Mailpit: `localhost` / `1025`). Not set: emails go to the log |
+| `BASE_URL` | `http://localhost:${PORT}` | Public address of the app, for links in emails |
+| `MAIL_FROM` | `Lendloop <no-reply@lendloop.local>` | Sender of the emails |
+| `REMINDERS_CRON` | `0 0 8 * * *` | When the reminder job runs (Spring cron, server time zone); `-` turns it off |
 
-To use PostgreSQL locally (needs Docker):
+To use PostgreSQL and a local mail catcher (needs Docker):
 
 ```bash
 docker compose up -d
@@ -89,10 +98,11 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `ItemControllerTests`: creating, editing and deleting items, and that another user can't see or change them.
 - `LoanTest`: the loan state machine on its own, including every forbidden transition (parameterized), with no Spring or database.
 - `LoanFlowTests`: the whole loan flow over HTTP, who may do what, due-date limits, one person at a time, overdue display, and no deleting lent-out items. (See PROGRESS.md for the bug that led to `WebTest`.)
+- `LoanReminderTests`: the reminder job against the database with a mocked `JavaMailSender`: the "due tomorrow" email and its text, no second email on the same day, overdue on the first day and then weekly, nothing for returned loans or requests, a failed email retried without blocking the others, and no header injection through item names.
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
-- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group and loan queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
+- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group, loan and reminder queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
 
 ## Project structure
 
@@ -102,7 +112,7 @@ src/main/java/io/github/gallileee/lendloop/
   security/   Spring Security config and the logged-in user (AppUserDetails)
   item/       items: entity, repository, service (ownership checks), controller
   group/      groups, membership, invite tokens, join flow
-  loan/       loans: state machine (Loan), rules (LoanService), pages
+  loan/       loans: state machine (Loan), rules (LoanService), pages, reminder job and emails
   web/        home redirect, login page, top bar data, date formatting
 src/main/resources/
   db/migration/   Flyway SQL migrations
@@ -114,7 +124,8 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 ## Limitations
 
-- Nobody is notified by email yet: requests and due dates are only visible in the app (milestone 3).
+- Only due dates are emailed. New requests and answers are only visible in the app, and there's no way to turn reminders off yet.
+- The reminder job assumes one running instance of the app; two instances would both send.
 - "Today" and due dates use the server's time zone.
 - Only the owner can mark a loan as returned. If they forget, it stays lent out.
 - Invite tokens are stored in plain text so the owner can see the link again. Anyone with read access to the database could use a link until it expires.
@@ -128,7 +139,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders:** a daily job emails borrowers about overdue loans (Mailpit locally); record a loan to someone outside the app; fill in book details from an ISBN via Open Library.
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); record a loan to someone outside the app; fill in book details from an ISBN via Open Library.
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).
