@@ -10,6 +10,7 @@
     </div>
 
     <p th:if="${message}" class="notice" role="status" th:text="${message}">Added.</p>
+    <p th:if="${error}" class="alert" role="alert" th:text="${error}">It's lent out right now.</p>
 
     <section th:if="${#lists.isEmpty(items)}" class="card empty">
       <h2>Nothing here yet</h2>
@@ -25,6 +26,10 @@
             <span class="tag" th:text="${item.category.label}">Board game</span>
             <span th:if="${item.available}" class="status status-on">Can be lent</span>
             <span th:unless="${item.available}" class="status status-off">Not lending</span>
+            <th:block th:if="${loans.isOnLoan(item.id)}" th:with="loan=${loans.activeLoan(item.id)}">
+              <span class="status" th:text="'Lent to ' + ${loan.borrower.displayName}">Lent to Sam</span>
+              <span th:replace="~{fragments :: due(${loan}, ${today})}"></span>
+            </th:block>
           </p>
           <p th:if="${item.description}" class="item-description" th:text="${item.description}">Base game.</p>
         </div>

@@ -41,9 +41,22 @@ public class ItemService {
 		return item;
 	}
 
+	// Deleting would also delete its loans (on delete cascade), so a lent-out item has to be
+	// marked as returned first. Open requests for it are simply dropped.
 	@Transactional
 	public void delete(Long id, Long ownerId) {
-		items.delete(getOwned(id, ownerId));
+		Item item = getOwned(id, ownerId);
+		if (items.isLentOut(id)) {
+			throw new ItemLentOutException();
+		}
+		items.delete(item);
+	}
+
+	public static class ItemLentOutException extends RuntimeException {
+
+		ItemLentOutException() {
+			super("A lent-out item can't be deleted");
+		}
 	}
 
 	private static String blankToNull(String text) {

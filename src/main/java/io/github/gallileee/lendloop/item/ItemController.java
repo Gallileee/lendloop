@@ -1,7 +1,10 @@
 package io.github.gallileee.lendloop.item;
 
+import io.github.gallileee.lendloop.loan.LoanService;
 import io.github.gallileee.lendloop.security.AppUserDetails;
+import io.github.gallileee.lendloop.web.Dates;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -20,9 +23,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class ItemController {
 
 	private final ItemService itemService;
+	private final LoanService loanService;
+	private final Dates dates;
 
-	public ItemController(ItemService itemService) {
+	public ItemController(ItemService itemService, LoanService loanService, Dates dates) {
 		this.itemService = itemService;
+		this.loanService = loanService;
+		this.dates = dates;
 	}
 
 	@ModelAttribute("categories")
@@ -32,7 +39,11 @@ public class ItemController {
 
 	@GetMapping
 	String list(@AuthenticationPrincipal AppUserDetails me, Model model) {
-		model.addAttribute("items", itemService.listOwnedBy(me.id()));
+		List<Item> items = itemService.listOwnedBy(me.id());
+		model.addAttribute("items", items);
+		// Shows "Lent to Sam until …" next to the things that are out.
+		model.addAttribute("loans", loanService.stateFor(items, me.id()));
+		model.addAttribute("today", dates.today());
 		return "items/list";
 	}
 
@@ -75,7 +86,13 @@ public class ItemController {
 
 	@PostMapping("/{id}/delete")
 	String delete(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id, RedirectAttributes redirect) {
-		itemService.delete(id, me.id());
+		try {
+			itemService.delete(id, me.id());
+		}
+		catch (ItemService.ItemLentOutException e) {
+			redirect.addFlashAttribute("error", "It's lent out right now. Mark it as returned under Loans first.");
+			return "redirect:/items";
+		}
 		redirect.addFlashAttribute("message", "Item deleted.");
 		return "redirect:/items";
 	}

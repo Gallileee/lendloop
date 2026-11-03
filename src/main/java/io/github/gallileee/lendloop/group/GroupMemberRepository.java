@@ -21,4 +21,10 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 	boolean existsByGroupIdAndUserId(Long groupId, Long userId);
 
 	long countByGroupId(Long groupId);
+
+	// Whether two users are together in at least one group (who may borrow from whom).
+	@Query("""
+			select count(a) > 0 from GroupMember a, GroupMember b
+			where a.group.id = b.group.id and a.user.id = :userId and b.user.id = :otherUserId""")
+	boolean shareAGroup(Long userId, Long otherUserId);
 }

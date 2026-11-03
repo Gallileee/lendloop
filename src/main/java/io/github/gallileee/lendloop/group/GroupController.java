@@ -1,5 +1,6 @@
 package io.github.gallileee.lendloop.group;
 
+import io.github.gallileee.lendloop.loan.LoanService;
 import io.github.gallileee.lendloop.security.AppUserDetails;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
@@ -25,9 +26,11 @@ public class GroupController {
 	private static final DateTimeFormatter EXPIRY_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.ENGLISH);
 
 	private final GroupService groupService;
+	private final LoanService loanService;
 
-	public GroupController(GroupService groupService) {
+	public GroupController(GroupService groupService, LoanService loanService) {
 		this.groupService = groupService;
+		this.loanService = loanService;
 	}
 
 	@GetMapping
@@ -55,6 +58,8 @@ public class GroupController {
 	String show(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id, Model model) {
 		GroupService.GroupPage page = groupService.page(id, me.id());
 		model.addAttribute("page", page);
+		// Which items are out, and which I've already asked for, so each gets the right button.
+		model.addAttribute("loans", loanService.stateFor(page.lendableItems(), me.id()));
 		if (page.me().isOwner()) {
 			// Absolute, so it can be pasted into a chat. Behind a reverse proxy this needs
 			// server.forward-headers-strategy so the public host and https are used.

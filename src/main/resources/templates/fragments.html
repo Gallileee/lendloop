@@ -12,6 +12,10 @@
     <nav sec:authorize="isAuthenticated()" class="topbar-links" aria-label="Main">
       <a th:href="@{/items}" th:attr="aria-current=${section == 'items'} ? 'page' : null">My things</a>
       <a th:href="@{/groups}" th:attr="aria-current=${section == 'groups'} ? 'page' : null">Groups</a>
+      <a th:href="@{/loans}" th:attr="aria-current=${section == 'loans'} ? 'page' : null">Loans<span
+         th:if="${openRequests != null and openRequests > 0}" class="badge"
+         th:attr="aria-label=${openRequests} + ' waiting for your answer'"
+         th:text="${openRequests}">2</span></a>
     </nav>
     <nav sec:authorize="isAuthenticated()" class="topbar-nav" aria-label="Account">
       <span class="muted" th:text="${#authentication.principal.displayName()}">Alex</span>
@@ -20,5 +24,13 @@
       </form>
     </nav>
   </header>
+
+  <!-- A loan's due date, with an "overdue" warning in words, not only in colour. -->
+  <th:block th:fragment="due(loan, today)">
+    <span th:if="${loan.isOverdueOn(today)}" class="status status-late"
+          th:text="'Overdue since ' + ${@dates.format(loan.dueDate)}">Overdue since 1 Nov 2026</span>
+    <span th:unless="${loan.isOverdueOn(today)}" class="status"
+          th:text="'Due ' + ${@dates.format(loan.dueDate)}">Due 17 Nov 2026</span>
+  </th:block>
 </body>
 </html>

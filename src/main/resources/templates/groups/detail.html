@@ -47,6 +47,27 @@
             </p>
             <p th:if="${item.description}" class="item-description" th:text="${item.description}">Base game.</p>
           </div>
+          <div class="item-actions" th:with="mine=${item.owner.id == page.me.user.id},
+                                              active=${loans.activeLoan(item.id)}">
+            <span th:if="${active != null and active.borrower.id == page.me.user.id}" class="status status-on">You have it</span>
+            <span th:if="${active != null and active.borrower.id != page.me.user.id}" class="status status-off"
+                  th:text="${mine} ? 'Lent to ' + ${active.borrower.displayName} : 'On loan'">On loan</span>
+            <a th:if="${active == null and loans.isRequestedByMe(item.id)}" class="status status-off"
+               th:href="@{/loans}">Requested</a>
+            <details th:if="${active == null and !mine and !loans.isRequestedByMe(item.id)}" class="ask">
+              <summary class="button button-secondary">Ask to borrow</summary>
+              <form th:action="@{/loans}" method="post" class="form ask-form">
+                <input type="hidden" name="itemId" th:value="${item.id}">
+                <input type="hidden" name="groupId" th:value="${page.group.id}">
+                <label>Message <span class="muted">(optional)</span>
+                  <textarea name="message" rows="2" maxlength="300"
+                            placeholder="When you need it, for how long"></textarea>
+                </label>
+                <button type="submit" class="button"
+                        th:text="'Ask ' + ${item.owner.displayName}">Ask Sam</button>
+              </form>
+            </details>
+          </div>
         </li>
       </ul>
     </section>
