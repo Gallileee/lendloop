@@ -1,5 +1,20 @@
 # Progress log
 
+## 2026-11-03: All HTTP tests run without a test transaction
+
+Follow-up to the `LazyInitializationException` found in milestone 2b.
+
+Done:
+- New `WebTest` base class (`@SpringBootTest` + MockMvc, **not** `@Transactional`):
+  - empties `loan`, `item`, `group_member`, `app_group`, `app_user` after each test, children first;
+  - asserts that these are all the app's tables, so a future migration can't add a table whose rows leak between tests.
+- `RegistrationTests`, `ItemControllerTests`, `GroupTests` and `LoanFlowTests` extend it. `LoanFlowTests` lost its own copy of the cleanup.
+- `LoanConstraintTests` stays transactional: it only uses repositories, no HTTP, so it has no "after the transaction" step to protect.
+
+Result: all 52 local tests still pass, so items, groups and registration had no hidden lazy-loading bug.
+
+Proof that the tests now catch this class of bug: removing the `join fetch` from `GroupMemberRepository.findByGroupIdAndUserId` makes `GroupTests` fail with `LazyInitializationException` (before, under `@Transactional`, it would have passed). The change was reverted after the check.
+
 ## 2026-11-03: Milestone 2b, loans
 
 Done:
@@ -114,10 +129,9 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 ## Next steps (in order)
 
 1. Overdue reminders: `@Scheduled` daily job + email (Spring Mail, Mailpit in compose).
-2. Run `ItemControllerTests` and `GroupTests` without a test transaction too (like `LoanFlowTests`), so lazy-loading bugs can't hide.
-3. Loan to someone outside the app (just a name).
-4. ISBN lookup via Open Library for books.
-5. Login rate limiting, password reset by email.
-6. Czech translation (`messages_cs.properties`).
-7. Group management: rename, delete, owner removes a member, hand over ownership.
-8. Deployment on a free tier.
+2. Loan to someone outside the app (just a name).
+3. ISBN lookup via Open Library for books.
+4. Login rate limiting, password reset by email.
+5. Czech translation (`messages_cs.properties`).
+6. Group management: rename, delete, owner removes a member, hand over ownership.
+7. Deployment on a free tier.

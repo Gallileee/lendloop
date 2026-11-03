@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import io.github.gallileee.lendloop.WebTest;
 import io.github.gallileee.lendloop.group.AppGroup;
 import io.github.gallileee.lendloop.group.GroupForm;
 import io.github.gallileee.lendloop.group.GroupService;
@@ -24,30 +25,14 @@ import io.github.gallileee.lendloop.user.AppUserRepository;
 import io.github.gallileee.lendloop.web.Dates;
 import java.time.Instant;
 import java.time.LocalDate;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 // Alex owns a board game, Sam is in Alex's group, Kim is in no group with either.
-//
-// Deliberately NOT @Transactional, unlike the other MockMvc tests: a test transaction keeps
-// the Hibernate session open across the whole request, so code that reads a lazy association
-// after the service's transaction has ended passes here and fails in production
-// (LazyInitializationException). Each request now commits on its own, as it does for real,
-// and the tables are emptied after every test instead of rolled back.
-@SpringBootTest
-@AutoConfigureMockMvc
-class LoanFlowTests {
-
-	@Autowired
-	MockMvc mvc;
+class LoanFlowTests extends WebTest {
 
 	@Autowired
 	AppUserRepository users;
@@ -63,9 +48,6 @@ class LoanFlowTests {
 
 	@Autowired
 	Dates dates;
-
-	@Autowired
-	JdbcTemplate jdbc;
 
 	AppUser alex;
 	AppUser sam;
@@ -83,13 +65,6 @@ class LoanFlowTests {
 		flat = groupService.create(alex.getId(), form);
 		groupService.join(flat.getInviteToken(), sam.getId());
 		catan = items.save(new Item(alex, "Catan", null, Category.GAME, true));
-	}
-
-	@AfterEach
-	void emptyTables() {
-		for (String table : new String[] {"loan", "item", "group_member", "app_group", "app_user"}) {
-			jdbc.update("delete from " + table);
-		}
 	}
 
 	// The current row: entities held by the test are detached copies and don't see changes.
