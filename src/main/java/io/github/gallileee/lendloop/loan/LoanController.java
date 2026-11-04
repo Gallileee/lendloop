@@ -22,8 +22,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @RequestMapping("/loans")
 public class LoanController {
 
-	static final int DEFAULT_LOAN_DAYS = 14;
-
 	private final LoanService loanService;
 	private final Dates dates;
 
@@ -34,11 +32,9 @@ public class LoanController {
 
 	@GetMapping
 	String overview(@AuthenticationPrincipal AppUserDetails me, Model model) {
-		LocalDate today = dates.today();
 		model.addAttribute("overview", loanService.overview(me.id()));
-		model.addAttribute("today", today);
-		model.addAttribute("defaultDueDate", today.plusDays(DEFAULT_LOAN_DAYS));
-		model.addAttribute("maxDueDate", today.plusDays(LoanService.MAX_LOAN_DAYS));
+		model.addAttribute("today", dates.today());
+		model.addAttribute("dueDates", loanService.dueDateRange());
 		return "loans/list";
 	}
 
@@ -60,7 +56,20 @@ public class LoanController {
 			RedirectAttributes redirect) {
 		return run(redirect, "redirect:/loans", "It's already lent out. Mark it as returned first.", () -> {
 			Loan loan = loanService.approve(id, me.id(), dueDate);
-			return "Lent “" + loan.getItem().getName() + "” to " + loan.getBorrower().getDisplayName()
+			return "Lent “" + loan.getItem().getName() + "” to " + loan.getBorrowerDisplayName()
+					+ " until " + dates.format(loan.getDueDate()) + ".";
+		});
+	}
+
+	// From the My things page: the owner lends an item to someone who isn't on Lendloop.
+	@PostMapping("/outside")
+	String lendToOutsider(@AuthenticationPrincipal AppUserDetails me, @RequestParam Long itemId,
+			@RequestParam(required = false) String borrowerName,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate,
+			RedirectAttributes redirect) {
+		return run(redirect, "redirect:/items", "It's already lent out. Mark it as returned first.", () -> {
+			Loan loan = loanService.lendToOutsider(itemId, me.id(), borrowerName, dueDate);
+			return "Lent “" + loan.getItem().getName() + "” to " + loan.getBorrowerDisplayName()
 					+ " until " + dates.format(loan.getDueDate()) + ".";
 		});
 	}

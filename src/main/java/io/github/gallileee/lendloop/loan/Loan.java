@@ -32,9 +32,14 @@ public class Loan {
 	@JoinColumn(name = "item_id", nullable = false)
 	private Item item;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "borrower_id", nullable = false)
+	// An app user, or null when the item went to someone outside the app (borrowerName).
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "borrower_id")
 	private AppUser borrower;
+
+	// The name the owner typed for someone who isn't on Lendloop; null for app users.
+	@Column(name = "borrower_name")
+	private String borrowerName;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
@@ -81,6 +86,19 @@ public class Loan {
 		syncUniquenessKeys();
 	}
 
+	// A loan to someone outside the app. Nobody can answer a request, so it starts ACTIVE.
+	public static Loan toOutsider(Item item, String borrowerName, LocalDate dueDate, Instant now) {
+		Loan loan = new Loan();
+		loan.item = item;
+		loan.borrowerName = borrowerName;
+		loan.dueDate = dueDate;
+		loan.requestedAt = now;
+		loan.decidedAt = now;
+		loan.status = LoanStatus.ACTIVE;
+		loan.syncUniquenessKeys();
+		return loan;
+	}
+
 	public void approve(LocalDate dueDate, Instant now) {
 		requireStatus(LoanStatus.REQUESTED, "This request was already answered or withdrawn.");
 		this.dueDate = dueDate;
@@ -104,6 +122,19 @@ public class Loan {
 		requireStatus(LoanStatus.ACTIVE, "Only an item that is lent out can be marked as returned.");
 		this.returnedAt = now;
 		moveTo(LoanStatus.RETURNED);
+	}
+
+	public boolean isOutsideApp() {
+		return borrower == null;
+	}
+
+	public boolean isBorrowedBy(Long userId) {
+		return borrower != null && borrower.getId().equals(userId);
+	}
+
+	// Who has (or asked for) the item, for pages and emails.
+	public String getBorrowerDisplayName() {
+		return borrower != null ? borrower.getDisplayName() : borrowerName;
 	}
 
 	public boolean isOverdueOn(LocalDate today) {
@@ -165,6 +196,7 @@ public class Loan {
 		return item;
 	}
 
+	// Null for a loan to someone outside the app; see isOutsideApp().
 	public AppUser getBorrower() {
 		return borrower;
 	}

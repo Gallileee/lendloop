@@ -12,7 +12,8 @@
     <p th:if="${#lists.isEmpty(o.incomingRequests) and #lists.isEmpty(o.lentOut) and #lists.isEmpty(o.borrowed)
                  and #lists.isEmpty(o.myRequests) and #lists.isEmpty(o.history)}" class="card empty muted">
       Nothing borrowed or lent yet. Open one of your <a th:href="@{/groups}">groups</a> and ask for something,
-      or wait for friends to ask for your things.
+      wait for friends to ask for your things, or note a loan to someone outside the app under
+      <a th:href="@{/items}">My things</a>.
     </p>
 
     <!-- Requests for my things: the only section with a decision to make, so it comes first. -->
@@ -31,8 +32,8 @@
           <div class="loan-actions">
             <form th:action="@{/loans/{id}/approve(id=${loan.id})}" method="post" class="approve-form">
               <label>Return by
-                <input type="date" name="dueDate" required th:value="${defaultDueDate}"
-                       th:attr="min=${today},max=${maxDueDate}">
+                <input type="date" name="dueDate" required th:value="${dueDates.suggested}"
+                       th:attr="min=${dueDates.min},max=${dueDates.max}">
               </label>
               <button type="submit" class="button">Lend it</button>
             </form>
@@ -51,7 +52,8 @@
           <div class="item-main">
             <h3 class="item-name" th:text="${loan.item.name}">Catan</h3>
             <p class="item-meta">
-              <span th:text="'with ' + ${loan.borrower.displayName}">with Sam</span>
+              <span th:text="'with ' + ${loan.borrowerDisplayName}">with Sam</span>
+              <span th:if="${loan.outsideApp}" class="tag">Not on Lendloop</span>
               <span th:replace="~{fragments :: due(${loan}, ${today})}"></span>
             </p>
           </div>
@@ -102,8 +104,8 @@
       <ul class="member-list card history">
         <li th:each="loan : ${o.history}">
           <span th:text="${loan.item.name}">Catan</span>
-          <span class="muted" th:text="${loan.borrower.id == #authentication.principal.id()}
-                ? 'from ' + ${loan.item.owner.displayName} : 'to ' + ${loan.borrower.displayName}">to Sam</span>
+          <span class="muted" th:text="${loan.isBorrowedBy(#authentication.principal.id())}
+                ? 'from ' + ${loan.item.owner.displayName} : 'to ' + ${loan.borrowerDisplayName}">to Sam</span>
           <span class="tag" th:text="${#strings.capitalize(#strings.toLowerCase(loan.status.name()))}">Returned</span>
         </li>
       </ul>

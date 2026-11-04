@@ -86,6 +86,16 @@ class PostgresMigrationTest {
 		loanService.markReturned(loan.getId(), owner.getId());
 		assertThat(loanService.overview(borrower.getId()).history()).extracting(Loan::getStatus)
 			.containsExactly(LoanStatus.RETURNED);
+
+		// V6: a loan to someone outside the app (no borrower row) still shows up in the
+		// left-joined queries.
+		Loan outside = loanService.lendToOutsider(ladder.getId(), owner.getId(), "Neighbour", LocalDate.now().plusDays(3));
+		assertThat(loanService.overview(owner.getId()).lentOut()).extracting(Loan::getBorrowerDisplayName)
+			.containsExactly("Neighbour");
+		assertThat(loans.findActiveDueBy(LocalDate.now().plusDays(3))).extracting(Loan::getId).contains(outside.getId());
+		loanService.markReturned(outside.getId(), owner.getId());
+		assertThat(loanService.overview(owner.getId()).history()).extracting(Loan::getBorrowerDisplayName)
+			.contains("Neighbour");
 	}
 
 	@Test
