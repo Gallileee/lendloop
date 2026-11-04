@@ -209,4 +209,29 @@ class LoanReminderTests extends WebTest {
 		assertThat(mail.getSubject()).isEqualTo("“Catan Bcc: everyone@example.com” is due back tomorrow");
 		assertThat(mail.getBcc()).isNull();
 	}
+
+	@Test
+	void forSomeoneOutsideTheAppOnlyTheOwnerHearsOnce() {
+		Item book = items.save(new Item(alex, "Dune", null, Category.BOOK, true));
+		Loan dune = loans.save(Loan.toOutsider(book, "Grandma", DUE.minusDays(5), NOW));
+		LocalDate firstLateDay = DUE.minusDays(4); // Catan is not due yet that day
+
+		assertThat(job.sendReminders(DUE.minusDays(6))).as("nobody to remind the day before").isZero();
+		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+
+		assertThat(job.sendReminders(firstLateDay)).isOne();
+		SimpleMailMessage mail = onlyMail();
+		assertThat(mail.getTo()).containsExactly("alex@example.com");
+		assertThat(mail.getSubject()).isEqualTo("“Dune” is overdue at Grandma");
+		assertThat(mail.getText()).contains("“Dune”, which you lent to Grandma, was due back on 12 Nov 2026 (1 day ago).");
+		assertThat(loans.findById(dune.getId()).orElseThrow().getLastReminderOn()).isEqualTo(firstLateDay);
+
+		// The weekly overdue reminders are for borrowers, so the owner isn't emailed again.
+		// (Catan goes back first: it would be overdue by then and send its own emails.)
+		Loan returned = loans.findById(catan.getId()).orElseThrow();
+		returned.markReturned(NOW);
+		loans.save(returned);
+		assertThat(job.sendReminders(firstLateDay.plusDays(7))).isZero();
+		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+	}
 }

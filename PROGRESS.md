@@ -1,5 +1,34 @@
 # Progress log
 
+## 2026-11-04: Milestone 3c, lending to someone outside the app
+
+Why: next step 1 in this log. Every single-user lending tracker lets you type a borrower's name or pick a contact, because many borrowers will never install the app (e.g. [Borrow : Loan Reminder](https://apps.apple.com/app/id1168418139), [Who Has My Stuff?](https://f-droid.org/en/packages/de.freewarepoint.whohasmystuff/)). Without it, LendLoop could only record loans inside a group.
+
+Done:
+- Flyway `V6__outside_borrowers.sql`:
+  - `loan.borrower_id` is nullable, new `loan.borrower_name varchar(60)`.
+  - `ck_loan_one_borrower`: exactly one of the two is set.
+  - `ck_loan_outside_never_requested`: a named borrower's loan is only ever `ACTIVE` or `RETURNED`.
+- `Loan.toOutsider(item, name, dueDate, now)` creates the loan directly as `ACTIVE`. New `isOutsideApp()`, `isBorrowedBy(userId)` and `getBorrowerDisplayName()`, so templates and emails never dereference a null borrower.
+- `LoanService.lendToOutsider`: only the owner's item (otherwise 404), the name is trimmed with line breaks / tabs / control characters collapsed to one space (it goes into email subjects), 1–60 characters, the same due-date limits as approving (shared `requireValidDueDate`), and not while the item is already out.
+  - Works for items that aren't shared with groups: lending in person doesn't need a group.
+  - `dueDateRange()` gives both pages the same min / suggested (+14 days) / max for the date input; `LoanController.DEFAULT_LOAN_DAYS` moved into `LoanService`.
+- `POST /loans/outside` (PRG back to My things) and a **Lend** disclosure form on each item at home on My things.
+- **All loan queries now `left join fetch l.borrower`.** An inner fetch join silently drops loans without a borrower; this was the main risk of the change. `findRecentClosed` filters on the join alias `b.id` instead of `l.borrower.id`.
+- Templates: Loans shows "with Grandma" + a "Not on Lendloop" tag; history and the group page use `isBorrowedBy(...)` instead of `loan.borrower.id`, which would throw on a null borrower. Group members only see "On loan".
+- Reminder job: no borrower email for outside loans; the owner's one-off overdue notice works as before ("“Dune” is overdue at Grandma").
+- Tests: `OutsideLoanTests` (6, new), `LoanTest` +1 (20), `LoanReminderTests` +1 (9), `PostgresMigrationTest` extended (outside loan through the left-joined queries on PostgreSQL). 83 in total.
+
+Verified locally:
+- `./mvnw test`: 80 passed, 3 skipped (PostgreSQL, no Docker; CI runs them, including V6 on PostgreSQL).
+- Mutation check: putting back the inner `join fetch l.borrower` in `findForOwner` makes `OutsideLoanTests.theOwnerLendsToSomeoneOutsideTheApp` fail. Reverted afterwards.
+
+Not verified locally: the Lend form in a browser (starting the local server was declined again in this automated run). To check by hand: `./mvnw spring-boot:run`, open My things, click **Lend** on an item, type a name, and check My things, Loans and the phone layout (375 px) of the open form.
+
+Trade-offs:
+- A plain name, no contacts table: simplest thing that records the loan. The same person typed twice is two names (see next steps).
+- Outside borrowers have no email, so they get no reminders; the owner only gets the one overdue notice, not weekly ones.
+
 ## 2026-11-03: Milestone 3b, email settings and the owner's overdue notice
 
 Done:
@@ -176,10 +205,11 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Loan to someone outside the app (just a name).
-2. Check the Settings page in the browser (name in the top bar, phone layout), then consider a signed one-click unsubscribe link (RFC 8058) in emails.
-3. ISBN lookup via Open Library for books.
-4. Login rate limiting, password reset by email.
-5. Czech translation (`messages_cs.properties`).
-6. Group management: rename, delete, owner removes a member, hand over ownership.
-7. Deployment on a free tier.
+1. Check in the browser: the Lend form on My things (desktop and 375 px) and the Settings page (name in the top bar).
+2. ISBN lookup via Open Library for books.
+3. Owner reminders for outside loans: a "due tomorrow" heads-up and the weekly overdue nudge go to the owner, since the borrower can't get them. Maybe suggest names already used (datalist) so the same person isn't typed differently.
+4. Signed one-click unsubscribe link (RFC 8058) in emails.
+5. Login rate limiting, password reset by email.
+6. Czech translation (`messages_cs.properties`).
+7. Group management: rename, delete, owner removes a member, hand over ownership.
+8. Deployment on a free tier.

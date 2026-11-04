@@ -78,7 +78,7 @@ class ReminderMailer {
 
 	SimpleMailMessage writeOwnerNotice(Loan loan, LocalDate today) {
 		String item = quotedItem(loan);
-		String borrower = singleLine(loan.getBorrower().getDisplayName());
+		String borrower = singleLine(loan.getBorrowerDisplayName());
 		String due = dates.format(loan.getDueDate());
 		String subject = item + " is overdue at " + borrower;
 		String body = item + ", which you lent to " + borrower + ", was due back on " + due + " ("

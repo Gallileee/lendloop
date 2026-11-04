@@ -44,6 +44,8 @@ public class ItemController {
 		// Shows "Lent to Sam until …" next to the things that are out.
 		model.addAttribute("loans", loanService.stateFor(items, me.id()));
 		model.addAttribute("today", dates.today());
+		// For the "Lend to someone" form on items that are at home.
+		model.addAttribute("dueDates", loanService.dueDateRange());
 		return "items/list";
 	}
 

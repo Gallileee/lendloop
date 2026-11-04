@@ -2,6 +2,7 @@ package io.github.gallileee.lendloop.loan;
 
 import io.github.gallileee.lendloop.group.GroupMemberRepository;
 import io.github.gallileee.lendloop.item.Item;
+import io.github.gallileee.lendloop.item.ItemNotFoundException;
 import io.github.gallileee.lendloop.item.ItemRepository;
 import io.github.gallileee.lendloop.user.AppUserRepository;
 import io.github.gallileee.lendloop.web.Dates;
@@ -22,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 // Who may do what with a loan. The Loan entity checks which status changes are possible;
 // this service checks that the right person asks for them:
 //   borrower: request (needs a shared group, a lendable item that isn't theirs), cancel
-//   owner:    approve with a due date, decline, mark returned
+//   owner:    approve with a due date, decline, mark returned, lend to someone outside the app
 // Anyone else gets LoanNotFoundException (404).
 //
 // Two writes that race (two requests at once, two approvals of the same item) are stopped by
@@ -32,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class LoanService {
 
 	static final int MAX_LOAN_DAYS = 365;
+	static final int DEFAULT_LOAN_DAYS = 14;
+	static final int MAX_NAME_LENGTH = 60;
 
 	private static final Set<LoanStatus> CLOSED =
 			EnumSet.of(LoanStatus.RETURNED, LoanStatus.DECLINED, LoanStatus.CANCELLED);
@@ -56,6 +59,10 @@ public class LoanService {
 	// Everything the loans page shows, from the point of view of one user.
 	public record Overview(List<Loan> incomingRequests, List<Loan> lentOut, List<Loan> borrowed,
 			List<Loan> myRequests, List<Loan> history) {
+	}
+
+	// The dates a return-date input offers: today at the earliest, a suggestion, a year at most.
+	public record DueDateRange(LocalDate min, LocalDate suggested, LocalDate max) {
 	}
 
 	// What a list of items looks like to one user: which are lent out (and to whom),
@@ -107,16 +114,34 @@ public class LoanService {
 	@Transactional
 	public Loan approve(Long loanId, Long ownerId, LocalDate dueDate) {
 		Loan loan = asOwner(loanId, ownerId);
-		LocalDate today = dates.today();
-		if (dueDate == null || dueDate.isBefore(today) || dueDate.isAfter(today.plusDays(MAX_LOAN_DAYS))) {
-			throw new LoanRuleException("Pick a return date between today and a year from now.");
-		}
+		requireValidDueDate(dueDate);
 		if (loans.existsByItemIdAndStatus(loan.getItem().getId(), LoanStatus.ACTIVE)) {
 			throw new LoanRuleException("It's already lent out. Mark it as returned first.");
 		}
 		loan.approve(dueDate, clock.instant());
 		loans.flush();
 		return loan;
+	}
+
+	// The owner hands an item to someone who isn't on Lendloop and notes their name. Works for
+	// items that aren't shared with groups too: lending in person doesn't need a group.
+	@Transactional
+	public Loan lendToOutsider(Long itemId, Long ownerId, String borrowerName, LocalDate dueDate) {
+		Item item = items.findByIdAndOwnerId(itemId, ownerId)
+			.orElseThrow(() -> new ItemNotFoundException(itemId));
+		// Line breaks and tabs become single spaces: the name ends up in email subjects too.
+		String name = borrowerName == null ? "" : borrowerName.replaceAll("[\\s\\p{Cntrl}]+", " ").strip();
+		if (name.isEmpty()) {
+			throw new LoanRuleException("Write who you're lending it to.");
+		}
+		if (name.length() > MAX_NAME_LENGTH) {
+			throw new LoanRuleException("Keep the name under " + MAX_NAME_LENGTH + " characters.");
+		}
+		requireValidDueDate(dueDate);
+		if (loans.existsByItemIdAndStatus(itemId, LoanStatus.ACTIVE)) {
+			throw new LoanRuleException("It's already lent out. Mark it as returned first.");
+		}
+		return loans.saveAndFlush(Loan.toOutsider(item, name, dueDate, clock.instant()));
 	}
 
 	@Transactional
@@ -173,6 +198,18 @@ public class LoanService {
 	@Transactional(readOnly = true)
 	public boolean isLentOut(Long itemId) {
 		return loans.existsByItemIdAndStatus(itemId, LoanStatus.ACTIVE);
+	}
+
+	public DueDateRange dueDateRange() {
+		LocalDate today = dates.today();
+		return new DueDateRange(today, today.plusDays(DEFAULT_LOAN_DAYS), today.plusDays(MAX_LOAN_DAYS));
+	}
+
+	private void requireValidDueDate(LocalDate dueDate) {
+		LocalDate today = dates.today();
+		if (dueDate == null || dueDate.isBefore(today) || dueDate.isAfter(today.plusDays(MAX_LOAN_DAYS))) {
+			throw new LoanRuleException("Pick a return date between today and a year from now.");
+		}
 	}
 
 	private Loan asOwner(Long loanId, Long ownerId) {

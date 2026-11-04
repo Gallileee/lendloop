@@ -10,17 +10,18 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.transaction.annotation.Transactional;
 
 // The fetch joins load what the pages show, because they render after the transaction
-// has ended (open-in-view is off).
+// has ended (open-in-view is off). The borrower is a LEFT join: a loan to someone outside
+// the app has no borrower row and an inner join would drop it.
 public interface LoanRepository extends JpaRepository<Loan, Long> {
 
 	@Query("""
-			select l from Loan l join fetch l.item i join fetch i.owner join fetch l.borrower
+			select l from Loan l join fetch l.item i join fetch i.owner left join fetch l.borrower
 			where l.id = :id""")
 	Optional<Loan> findWithParties(Long id);
 
 	// Loans of things I own, in the given statuses.
 	@Query("""
-			select l from Loan l join fetch l.item i join fetch l.borrower b
+			select l from Loan l join fetch l.item i left join fetch l.borrower b
 			where i.owner.id = :ownerId and l.status in :statuses
 			order by l.dueDate nulls last, l.requestedAt""")
 	List<Loan> findForOwner(Long ownerId, Collection<LoanStatus> statuses);
@@ -34,13 +35,13 @@ public interface LoanRepository extends JpaRepository<Loan, Long> {
 
 	// Finished loans I was part of, newest first.
 	@Query("""
-			select l from Loan l join fetch l.item i join fetch i.owner join fetch l.borrower
-			where (i.owner.id = :userId or l.borrower.id = :userId) and l.status in :statuses
+			select l from Loan l join fetch l.item i join fetch i.owner left join fetch l.borrower b
+			where (i.owner.id = :userId or b.id = :userId) and l.status in :statuses
 			order by l.requestedAt desc
 			limit 20""")
 	List<Loan> findRecentClosed(Long userId, Collection<LoanStatus> statuses);
 
-	@Query("select l from Loan l join fetch l.borrower where l.item.id in :itemIds and l.status = 'ACTIVE'")
+	@Query("select l from Loan l left join fetch l.borrower where l.item.id in :itemIds and l.status = 'ACTIVE'")
 	List<Loan> findActiveForItems(Collection<Long> itemIds);
 
 	@Query("select l.item.id from Loan l where l.borrower.id = :borrowerId and l.status = 'REQUESTED'")
@@ -53,7 +54,7 @@ public interface LoanRepository extends JpaRepository<Loan, Long> {
 	// Active loans that may need a reminder: due by the given day (tomorrow) or earlier.
 	// Loan.reminderDueOn decides which of them actually get one.
 	@Query("""
-			select l from Loan l join fetch l.item i join fetch i.owner join fetch l.borrower
+			select l from Loan l join fetch l.item i join fetch i.owner left join fetch l.borrower
 			where l.status = 'ACTIVE' and l.dueDate <= :dueBy
 			order by l.dueDate, l.id""")
 	List<Loan> findActiveDueBy(LocalDate dueBy);

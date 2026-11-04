@@ -143,4 +143,22 @@ class LoanTest {
 		assertThatThrownBy(() -> action.accept(loan)).isInstanceOf(LoanRuleException.class);
 		assertThat(loan.getStatus()).as("status after a refused change").isEqualTo(status);
 	}
+
+	@Test
+	void aLoanToSomeoneOutsideTheAppStartsActive() {
+		AppUser owner = new AppUser("alex@example.com", "Alex", "{noop}x");
+		Loan loan = Loan.toOutsider(new Item(owner, "Catan", null, Category.GAME, true), "Grandma",
+				TODAY.plusDays(7), NOW);
+
+		assertThat(loan.getStatus()).isEqualTo(LoanStatus.ACTIVE);
+		assertThat(loan.isOutsideApp()).isTrue();
+		assertThat(loan.getBorrower()).isNull();
+		assertThat(loan.getBorrowerDisplayName()).isEqualTo("Grandma");
+		assertThat(loan.isBorrowedBy(1L)).isFalse();
+		assertThat(loan.getDecidedAt()).isEqualTo(NOW);
+		assertThat(loan.reminderDueOn(TODAY.plusDays(8))).contains(ReminderKind.OVERDUE);
+
+		loan.markReturned(NOW);
+		assertThat(loan.getStatus()).isEqualTo(LoanStatus.RETURNED);
+	}
 }

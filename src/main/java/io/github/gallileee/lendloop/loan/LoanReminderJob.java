@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 // Once a day, emails borrowers whose loan is due tomorrow or overdue (rules in
 // Loan.reminderDueOn), and owners on the first day their item is overdue (Loan.ownerNoticeDueOn).
+// Someone outside the app has no email address here, so for those loans only the owner hears.
 // Each user chooses which of these they get on the Settings page.
 //
 // Each handled loan is recorded right away, so a crash halfway through or a second run the
@@ -47,7 +48,7 @@ class LoanReminderJob {
 			if (kind == null) {
 				continue;
 			}
-			if (loan.getBorrower().isRemindBorrowed()) {
+			if (!loan.isOutsideApp() && loan.getBorrower().isRemindBorrowed()) {
 				try {
 					mailer.send(loan, kind, today);
 					sent++;
