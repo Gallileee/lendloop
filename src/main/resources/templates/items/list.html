@@ -32,6 +32,7 @@
             </th:block>
           </p>
           <p th:if="${item.description}" class="item-description" th:text="${item.description}">Base game.</p>
+          <p th:if="${item.isbn}" class="muted" th:text="'ISBN ' + ${item.isbn}">ISBN 9780140328721</p>
         </div>
         <div class="item-actions">
           <!-- For lending in person to someone who isn't on Lendloop; app users ask from a group. -->

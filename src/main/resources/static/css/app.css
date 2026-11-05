@@ -79,6 +79,11 @@ a { color: var(--accent); }
 .form { display: grid; gap: 16px; margin: 16px 0; }
 .form label { display: grid; gap: 4px; font-weight: 600; }
 .form label .hint, .form label .muted { font-weight: 400; }
+.lookup-field { display: grid; gap: 4px; }
+.lookup-field > label { font-weight: 600; }
+.lookup-row { display: flex; gap: 8px; }
+.lookup-row input { flex: 1; min-width: 0; }
+.lookup-row .button { flex-shrink: 0; }
 .form label.checkbox { display: flex; align-items: center; gap: 8px; font-weight: 400; }
 
 input, select, textarea {
@@ -284,6 +289,7 @@ a.status { text-decoration: none; }
 @media (max-width: 560px) {
   .item { flex-direction: column; }
   .item-actions .button { flex: 1; }
-  .item-actions, .item-actions form { width: 100%; }
-  .item-actions form { flex: 1; display: flex; }
+  /* Only the Delete form: the Lend form nested in <details> keeps its stacked layout. */
+  .item-actions { width: 100%; flex-wrap: wrap; }
+  .item-actions > form { flex: 1; display: flex; }
 }

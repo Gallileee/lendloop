@@ -16,6 +16,7 @@ People keep asking online for an app that tracks what they own, what they want a
   - Emails are trimmed and compared case-insensitively.
   - Passwords need at least 10 characters with no composition rules (NIST SP 800-63B). They're stored as BCrypt hashes, and anything BCrypt would silently truncate (over 72 bytes) is rejected.
 - **My things:** add, edit and delete items with a name, category, optional description and a "friends can ask to borrow it" switch.
+- **Add a book by its ISBN.** Type or scan the 10 or 13 digits on Add item and *Look it up*: the title, authors, publisher and date are filled in from [Open Library](https://openlibrary.org/developers/api) (free, no API key), and you check them before saving. ISBN-10 and ISBN-13 are both accepted with or without hyphens, the check digit is verified, and the ISBN is stored as ISBN-13. If Open Library is slow (3 s connect / 5 s read timeout), down, or doesn't know the book, you get a message and fill it in by hand.
 - **Ownership is enforced on the server.** Every item query is scoped to the logged-in user, and someone else's item answers 404, so its existence isn't revealed.
 - **Groups** of friends:
   - Create a group and share its **invite link**. It holds a random 256-bit token and expires after 7 days.
@@ -81,6 +82,8 @@ Open http://localhost:8080, create an account and add some things. Data is kept 
 | `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | not set | SMTP server for reminder emails (Mailpit: `localhost` / `1025`). Not set: emails go to the log |
 | `BASE_URL` | `http://localhost:${PORT}` | Public address of the app, for links in emails |
 | `MAIL_FROM` | `Lendloop <no-reply@lendloop.local>` | Sender of the emails |
+| `OPENLIBRARY_USER_AGENT` | `Lendloop/0.1 (+https://github.com/Gallileee/lendloop)` | Sent with ISBN lookups. Open Library asks regular API users to name their app and a contact, so add your email when you deploy |
+| `OPENLIBRARY_BASE_URL` | `https://openlibrary.org` | Where ISBN lookups go |
 | `REMINDERS_CRON` | `0 0 8 * * *` | When the reminder job runs (Spring cron, server time zone); `-` turns it off |
 
 To use PostgreSQL and a local mail catcher (needs Docker):
@@ -100,6 +103,10 @@ Then set the variables from [.env.example](.env.example) and run the app as abov
 The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: each request commits on its own like in production, and the tables are emptied after every test. A transactional test would keep the Hibernate session open for the whole request and hide lazy-loading bugs. `WebTest` also fails if a migration adds a table it doesn't clean.
 
 - `RegistrationTests`: sign-up, validation, duplicate emails, CSRF and login.
+- `IsbnTest`: ISBN-10 and ISBN-13 check digits (including `X`), hyphens and spaces, ISBN-10 to ISBN-13, and what's rejected (parameterized, no Spring).
+- `BookInfoTest`: how a found book becomes an item name and description, and cutting it to the form's limits.
+- `OpenLibraryClientTest`: the HTTP side against `MockRestServiceServer`: the URLs and `User-Agent`, reading the edition and author JSON, 404 = not found, 500 = unavailable, a failing author skipped, and author keys from the response only used in a URL when they look like `/authors/OL…A` (at most 3).
+- `IsbnLookupTests`: the lookup box on Add item over HTTP with a mocked `BookLookup` (found, unknown, invalid, unreachable), saving the ISBN as ISBN-13, rejecting a wrong one, and the edit page.
 - `ItemControllerTests`: creating, editing and deleting items, and that another user can't see or change them.
 - `LoanTest`: the loan state machine on its own, including every forbidden transition (parameterized), with no Spring or database.
 - `LoanFlowTests`: the whole loan flow over HTTP, who may do what, due-date limits, one person at a time, overdue display, and no deleting lent-out items. (See PROGRESS.md for the bug that led to `WebTest`.)
@@ -118,6 +125,7 @@ src/main/java/io/github/gallileee/lendloop/
   user/       account entity, sign-up and settings forms, validation and services
   security/   Spring Security config and the logged-in user (AppUserDetails)
   item/       items: entity, repository, service (ownership checks), controller
+  book/       ISBN parsing and validation, Open Library lookup (BookLookup, OpenLibraryClient)
   group/      groups, membership, invite tokens, join flow
   loan/       loans: state machine (Loan), rules (LoanService), pages, reminder job and emails
   web/        home redirect, login page, top bar data, date formatting
@@ -144,12 +152,13 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - Sign-up says when an email is already registered, which reveals that the account exists. That's acceptable for an app between friends, but it should change before a public launch.
 - There's no password reset, email verification or rate limiting on login yet.
 - The UI is in English only.
+- ISBN lookup needs Open Library to be online, and its data is only as good as the catalogue (some editions have no author or an odd publisher name). Book covers aren't shown.
 
 ## Roadmap
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); fill in book details from an ISBN via Open Library.
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done).
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).

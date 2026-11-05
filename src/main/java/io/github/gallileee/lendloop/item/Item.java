@@ -1,5 +1,6 @@
 package io.github.gallileee.lendloop.item;
 
+import io.github.gallileee.lendloop.book.Isbn;
 import io.github.gallileee.lendloop.user.AppUser;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -37,6 +38,9 @@ public class Item {
 	// Whether friends can ask to borrow it (the owner may keep some things private for now).
 	@Column(nullable = false)
 	private boolean available = true;
+
+	// ISBN-13 digits for books, if the owner gave one.
+	private String isbn;
 
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
@@ -80,6 +84,14 @@ public class Item {
 
 	public boolean isAvailable() {
 		return available;
+	}
+
+	public String getIsbn() {
+		return isbn;
+	}
+
+	public void setIsbn(Isbn isbn) {
+		this.isbn = isbn == null ? null : isbn.value();
 	}
 
 	public Instant getCreatedAt() {

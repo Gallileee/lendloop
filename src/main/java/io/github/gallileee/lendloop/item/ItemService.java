@@ -1,5 +1,6 @@
 package io.github.gallileee.lendloop.item;
 
+import io.github.gallileee.lendloop.book.Isbn;
 import io.github.gallileee.lendloop.user.AppUserRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class ItemService {
 	public Item create(Long ownerId, ItemForm form) {
 		Item item = new Item(users.getReferenceById(ownerId), form.getName().trim(), blankToNull(form.getDescription()),
 				form.getCategory(), form.isAvailable());
+		item.setIsbn(Isbn.parse(form.getIsbn()).orElse(null));
 		return items.save(item);
 	}
 
@@ -38,6 +40,7 @@ public class ItemService {
 	public Item update(Long id, Long ownerId, ItemForm form) {
 		Item item = getOwned(id, ownerId);
 		item.update(form.getName().trim(), blankToNull(form.getDescription()), form.getCategory(), form.isAvailable());
+		item.setIsbn(Isbn.parse(form.getIsbn()).orElse(null));
 		return item;
 	}
 
