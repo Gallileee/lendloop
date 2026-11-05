@@ -9,6 +9,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,8 +40,14 @@ public class GroupService {
 		this.clock = clock;
 	}
 
-	// Everything the group page shows, loaded in one transaction.
-	public record GroupPage(AppGroup group, GroupMember me, List<GroupMember> members, List<Item> lendableItems) {
+	// What a group can borrow, in name order (ignoring case); the id keeps equal names stable.
+	private static final Sort ITEM_ORDER = Sort.by(Sort.Order.asc("name").ignoreCase(), Sort.Order.asc("id"));
+
+	// Everything the group page shows, loaded in one transaction. `items` are the lendable items
+	// that match the filter; `lendableCount` counts them all, so the page can say "2 of 9" and
+	// tell "nothing matches" apart from "nobody has added anything yet".
+	public record GroupPage(AppGroup group, GroupMember me, List<GroupMember> members, ItemFilter filter,
+			List<Item> items, long lendableCount) {
 	}
 
 	@Transactional
@@ -57,9 +65,18 @@ public class GroupService {
 
 	@Transactional(readOnly = true)
 	public GroupPage page(Long groupId, Long userId) {
+		return page(groupId, userId, ItemFilter.NONE);
+	}
+
+	@Transactional(readOnly = true)
+	public GroupPage page(Long groupId, Long userId, ItemFilter filter) {
 		GroupMember me = membership(groupId, userId);
-		return new GroupPage(me.getGroup(), me, members.findByGroupIdWithUser(groupId),
-				items.findLendableInGroup(groupId));
+		Specification<Item> lendable = GroupItemSpecs.lendableInGroup(groupId);
+		List<Item> shown = items.findAll(
+				lendable.and(GroupItemSpecs.matching(filter)).and(GroupItemSpecs.withOwner()), ITEM_ORDER);
+		long lendableCount = filter.isActive() ? items.count(lendable) : shown.size();
+		return new GroupPage(me.getGroup(), me, members.findByGroupIdWithUser(groupId), filter, shown,
+				lendableCount);
 	}
 
 	@Transactional

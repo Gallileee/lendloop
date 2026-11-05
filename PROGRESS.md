@@ -1,5 +1,33 @@
 # Progress log
 
+## 2026-11-05: Milestone 3f, search and filter on the group page
+
+Why: next step 1 in this log. Once a group has more than a screenful of things, scrolling is the only way to find the drill. Every lending / library app has a search box and category filter, and "is it free now?" is the first question before asking.
+
+Done:
+- `ItemFilter` record (group package): text, category, "free right now", parsed leniently from raw query parameters. An unknown category or `available=yes` is dropped, not a 400 on a GET. Text is trimmed, whitespace collapsed, cut to 100 characters.
+- `GroupItemSpecs`: the group page's query is now built with **Spring Data JPA Specifications** (Criteria API) instead of the fixed `ItemRepository.findLendableInGroup` JPQL, which is removed.
+  - Only the parts of the filter that are set become predicates. The alternative, one JPQL query with `(:q is null or …)`, binds untyped nulls, which PostgreSQL often rejects.
+  - Text: `lower(name) like` or `lower(description) like` (author is in the description for books). If the text is a valid ISBN (any format), also `isbn = <ISBN-13>`.
+  - **`%`, `_` and `\` from the user are escaped**, and the LIKE gets an explicit escape character. Without the explicit `escape`, newer Hibernate versions emit `escape ''` on PostgreSQL, which would make the backslash escaping useless.
+  - "Free right now": `not exists` an `ACTIVE` loan for the item.
+  - The owner is fetch-joined (open-in-view is off), skipped for the count query.
+  - Order: name ignoring case, then id (a `Sort` with `ignoreCase()`).
+- `GroupService.page(groupId, userId, filter)`: `GroupPage` now carries the filter, the matching `items` and `lendableCount` (one extra count query only when a filter is active).
+- Group page: a GET search form (`role="search"`, labelled fields, values kept), "2 of 9" in the count, *Clear*, and "Nothing matches your search" separate from "Nobody has anything to lend yet". One column on phones.
+- Tests: `ItemFilterTest` (13, no Spring), `GroupSearchTests` (10, `WebTest`), `PostgresMigrationTest` checks the escaped LIKE, the ISBN branch and `not exists` on PostgreSQL. 148 in total.
+
+Verified locally:
+- `./mvnw test`: 148 run, 0 failures, 3 skipped (PostgreSQL, no Docker; CI runs them).
+- Mutation check: removing the `%` escaping makes `GroupSearchTests.wildcardsInTheSearchAreTakenLiterally` fail. Restored afterwards.
+
+Not verified locally: the form in a browser (starting the demo server was declined in this automated run). To check by hand: start the `lendloop-memory-demo` launch config (port 8093), register two accounts, put a few items in a group, then try a search, a category, "Free right now" and the layout at 375 px and around 600 px wide (four columns in one row on desktop).
+
+Trade-offs:
+- Substring LIKE over full-text search: no extra infrastructure and works on H2 and PostgreSQL alike; no ranking or typo tolerance, and no index use. A group holds tens to hundreds of things.
+- No pagination: same reasoning. `JpaSpecificationExecutor.findAll(spec, pageable)` makes it a small change later.
+- Book covers from `covers.openlibrary.org` left out: they'd reveal every viewer's IP address to Open Library, so they need an opt-in setting first.
+
 ## 2026-11-05: Milestone 3e, owner reminders for loans outside the app
 
 Why: next step 1, chosen by the owner. A borrower outside the app has no email address, so after 3c nobody got the "due tomorrow" reminder or the weekly overdue ones for these loans. The owner only got one overdue notice.
@@ -267,9 +295,9 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Search and filter on a group page (by name, category, available now). For books with an ISBN, maybe show covers from `covers.openlibrary.org` (opt-in, since loading them reveals the viewer's IP to Open Library).
-2. Signed one-click unsubscribe link (RFC 8058) in emails.
-3. Login rate limiting, password reset by email.
-4. Czech translation (`messages_cs.properties`).
-5. Group management: rename, delete, owner removes a member, hand over ownership.
+1. Signed one-click unsubscribe link (RFC 8058) in emails.
+2. Login rate limiting, password reset by email.
+3. Group management: rename, delete, owner removes a member, hand over ownership.
+4. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
+5. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
 6. Deployment on a free tier.

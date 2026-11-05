@@ -258,6 +258,17 @@ a.status { text-decoration: none; }
 .history li { flex-wrap: wrap; }
 .history .tag { margin-left: auto; }
 
+.filter {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: end;
+  margin: 0 0 16px;
+}
+.filter label { display: grid; gap: 4px; font-weight: 600; font-size: 0.875rem; }
+.filter label.checkbox { display: flex; align-items: center; gap: 8px; font-weight: 400; min-height: 42px; }
+.filter-actions { display: flex; gap: 8px; }
+
 .ask { position: relative; }
 .ask summary { list-style: none; }
 .ask summary::-webkit-details-marker { display: none; }
@@ -273,6 +284,7 @@ a.status { text-decoration: none; }
 .item-actions .status { align-self: center; }
 
 @media (max-width: 560px) {
+  .filter { grid-template-columns: minmax(0, 1fr); }
   .topbar { flex-wrap: wrap; row-gap: 8px; }
   .item-actions .ask, .ask summary { width: 100%; }
   .ask-form { width: 100%; }
