@@ -29,14 +29,43 @@
     </section>
 
     <section>
-      <h2 class="section-title">Things you can borrow
-        <span class="count" th:text="${#lists.size(page.lendableItems)}">3</span></h2>
-      <p th:if="${#lists.isEmpty(page.lendableItems)}" class="card empty muted">
+      <h2 class="section-title" id="things">Things you can borrow
+        <span class="count" th:text="${page.filter.active} ? ${#lists.size(page.items)} + ' of ' + ${page.lendableCount}
+                                                          : ${page.lendableCount}">3</span></h2>
+      <p th:if="${page.lendableCount == 0}" class="card empty muted">
         Nobody in this group has anything to lend yet. Add your things under
         <a th:href="@{/items}">My things</a> and keep "Friends can ask to borrow it" on.
       </p>
-      <ul th:unless="${#lists.isEmpty(page.lendableItems)}" class="item-list">
-        <li th:each="item : ${page.lendableItems}" class="card item">
+      <!-- GET, so a search can be bookmarked, shared in the group chat and reloaded safely. -->
+      <form th:if="${page.lendableCount > 0}" th:action="@{/groups/{id}(id=${page.group.id})}" method="get"
+            class="filter" role="search" aria-label="Search this group's things">
+        <label class="filter-text">Search
+          <input type="search" name="q" th:value="${page.filter.text}" maxlength="100"
+                 placeholder="Name, author, ISBN…" autocomplete="off">
+        </label>
+        <label>Category
+          <select name="category">
+            <option value="">Any</option>
+            <option th:each="c : ${categories}" th:value="${c.name()}" th:text="${c.label}"
+                    th:selected="${c.name() == page.filter.categoryName}">Book</option>
+          </select>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="available" value="true" th:checked="${page.filter.availableNow}">
+          Free right now
+        </label>
+        <div class="filter-actions">
+          <button type="submit" class="button">Search</button>
+          <a th:if="${page.filter.active}" class="button button-secondary"
+             th:href="@{/groups/{id}(id=${page.group.id})}">Clear</a>
+        </div>
+      </form>
+      <p th:if="${page.lendableCount > 0 and #lists.isEmpty(page.items)}" class="card empty muted" role="status">
+        Nothing matches your search.
+        <a th:href="@{/groups/{id}(id=${page.group.id})}">Show everything</a>
+      </p>
+      <ul th:unless="${#lists.isEmpty(page.items)}" class="item-list">
+        <li th:each="item : ${page.items}" class="card item">
           <div class="item-main">
             <h3 class="item-name" th:text="${item.name}">Catan</h3>
             <p class="item-meta">

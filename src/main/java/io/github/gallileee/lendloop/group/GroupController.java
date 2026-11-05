@@ -1,5 +1,6 @@
 package io.github.gallileee.lendloop.group;
 
+import io.github.gallileee.lendloop.item.Category;
 import io.github.gallileee.lendloop.loan.LoanService;
 import io.github.gallileee.lendloop.security.AppUserDetails;
 import jakarta.validation.Valid;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -55,11 +57,14 @@ public class GroupController {
 	}
 
 	@GetMapping("/{id}")
-	String show(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id, Model model) {
-		GroupService.GroupPage page = groupService.page(id, me.id());
+	String show(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id,
+			@RequestParam(required = false) String q, @RequestParam(required = false) String category,
+			@RequestParam(required = false) String available, Model model) {
+		GroupService.GroupPage page = groupService.page(id, me.id(), ItemFilter.parse(q, category, available));
 		model.addAttribute("page", page);
+		model.addAttribute("categories", Category.values());
 		// Which items are out, and which I've already asked for, so each gets the right button.
-		model.addAttribute("loans", loanService.stateFor(page.lendableItems(), me.id()));
+		model.addAttribute("loans", loanService.stateFor(page.items(), me.id()));
 		if (page.me().isOwner()) {
 			// Absolute, so it can be pasted into a chat. Behind a reverse proxy this needs
 			// server.forward-headers-strategy so the public host and https are used.
