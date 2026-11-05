@@ -1,5 +1,6 @@
 package io.github.gallileee.lendloop.item;
 
+import io.github.gallileee.lendloop.book.ValidIsbn;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -19,12 +20,18 @@ public class ItemForm {
 
 	private boolean available = true;
 
+	// As typed; the service stores it normalised to ISBN-13.
+	@ValidIsbn
+	@Size(max = 30, message = "Use at most 30 characters.")
+	private String isbn = "";
+
 	public static ItemForm from(Item item) {
 		ItemForm form = new ItemForm();
 		form.setName(item.getName());
 		form.setDescription(item.getDescription());
 		form.setCategory(item.getCategory());
 		form.setAvailable(item.isAvailable());
+		form.setIsbn(item.getIsbn());
 		return form;
 	}
 
@@ -58,5 +65,13 @@ public class ItemForm {
 
 	public void setAvailable(boolean available) {
 		this.available = available;
+	}
+
+	public String getIsbn() {
+		return isbn;
+	}
+
+	public void setIsbn(String isbn) {
+		this.isbn = isbn == null ? "" : isbn.trim();
 	}
 }

@@ -6,6 +6,22 @@
   <main class="narrow">
     <h1 th:text="${itemId} ? 'Edit item' : 'Add item'">Add item</h1>
 
+    <!-- Fills the form below from Open Library. A GET form: it only reads, nothing is saved. -->
+    <form th:unless="${itemId}" th:action="@{/items/new}" method="get" class="card form lookup" role="search">
+      <div class="lookup-field">
+        <label for="isbn-lookup">Adding a book? Look it up by ISBN</label>
+        <div class="lookup-row">
+          <input id="isbn-lookup" type="text" name="isbn" th:value="${isbnQuery}" maxlength="30"
+                 autocomplete="off" placeholder="e.g. 978-0-14-032872-1" aria-describedby="isbn-lookup-hint"
+                 th:attr="aria-invalid=${lookupError != null}">
+          <button type="submit" class="button button-secondary">Look it up</button>
+        </div>
+        <span id="isbn-lookup-hint" class="hint">The 10 or 13 digits by the barcode. Details come from Open Library.</span>
+      </div>
+      <p th:if="${lookupFound}" class="notice" role="status" th:text="${lookupFound}">Found it.</p>
+      <p th:if="${lookupError}" class="alert" role="alert" th:text="${lookupError}">Not found.</p>
+    </form>
+
     <form th:action="${itemId} ? @{/items/{id}(id=${itemId})} : @{/items}" th:object="${form}"
           method="post" class="card form" novalidate>
       <label>Name
@@ -24,6 +40,11 @@
                   th:attr="aria-invalid=${#fields.hasErrors('description')}"></textarea>
         <span class="hint">Edition, size, condition, what's in the box.</span>
         <span class="field-error" th:if="${#fields.hasErrors('description')}" th:errors="*{description}"></span>
+      </label>
+      <label>ISBN <span class="muted">(optional, for books)</span>
+        <input type="text" th:field="*{isbn}" maxlength="30" autocomplete="off"
+               th:attr="aria-invalid=${#fields.hasErrors('isbn')}">
+        <span class="field-error" th:if="${#fields.hasErrors('isbn')}" th:errors="*{isbn}"></span>
       </label>
       <label class="checkbox">
         <input type="checkbox" th:field="*{available}">

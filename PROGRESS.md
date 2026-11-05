@@ -1,5 +1,45 @@
 # Progress log
 
+## 2026-11-05: Milestone 3d, book details from an ISBN (Open Library)
+
+Why: next step 2 in this log, and books are the most common thing lent between friends. Typing the title and author by hand is the slowest part of adding one. [Open Library's API](https://openlibrary.org/developers/api) is free and needs no key. It only asks frequent users to send a `User-Agent` with the app name and a contact.
+
+Done:
+- `book` package (`item` depends on it, not the other way round):
+  - `Isbn` record: parses what people type (ISBN-10 with `X`, ISBN-13, hyphens, spaces), checks the check digit and always holds ISBN-13.
+  - `@ValidIsbn`: a Bean Validation constraint, blank or valid.
+  - `BookLookup` interface and `BookInfo` record. `BookInfo` turns a book into the item name ("Title: Subtitle", ≤ 100) and description ("By A, B · Publisher, date", ≤ 1000).
+  - `OpenLibraryClient` uses Spring's `RestClient` on the JDK `HttpClient`, with a 3 s connect / 5 s read timeout and redirects followed:
+    - `GET /isbn/{isbn}.json` gives the **edition**, not the work. That's the copy on the shelf, e.g. a translation with its own title and publisher. It redirects to `/books/OL…M.json`.
+    - Then `GET /authors/OL…A.json` for at most 3 authors. A failing author is skipped. An author key from the response is only put into a URL if it matches `/authors/OL\d+A`.
+    - 404 means not found; other errors and timeouts raise `BookLookupUnavailableException`.
+  - Config: `lendloop.openlibrary.base-url` / `user-agent` (`OPENLIBRARY_*` variables). The tests point it at `openlibrary.invalid`, so a mistake can never call out.
+- Flyway `V7__item_isbn.sql`: `item.isbn varchar(13)` with a "13 characters" check. The form keeps what was typed; the service stores ISBN-13.
+- Add item page: a separate **GET** form, "Adding a book? Look it up by ISBN" (`/items/new?isbn=…`). It only reads; nothing is saved until the item form is submitted.
+  - Found: name, description, category Book and ISBN are filled in.
+  - Unknown: category and ISBN are still filled in.
+  - Invalid or over 30 characters: a message, and no call.
+  - Open Library down: a friendly message, and the details go to the log.
+- An ISBN field on the item form (add and edit), and "ISBN 978…" on My things.
+- **Fixed the phone layout of the Lend form (from 3c).** At 375 px the open form made the page 556 px wide and cut off *Lend it*. The cause: the mobile rule `.item-actions form { display: flex }` also hit the form nested in `<details>`. It now only targets `.item-actions > form`, and the action row wraps.
+- Tests: `IsbnTest` (20), `BookInfoTest` (4), `OpenLibraryClientTest` (6, `MockRestServiceServer`), `IsbnLookupTests` (8, `@MockitoBean BookLookup`). 121 in total.
+
+Verified locally:
+- `./mvnw test`: 118 passed, 3 skipped (PostgreSQL, no Docker; CI runs them, including V7 on PostgreSQL).
+- Against the real Open Library, with a temporary test (deleted afterwards):
+  - `0-14-032872-6` → "Fantastic Mr. Fox", Roald Dahl, Puffin, October 1, 1988 (through the `/isbn` → `/books` redirect).
+  - `9780441013593` → "Dune", Frank Herbert, Ace Trade.
+- In the browser, using a new `lendloop-memory-demo` launch config (port 8093, in-memory H2), because an older instance from 3 Nov on port 8080 still held the H2 file:
+  - The lookup filled in the form; *Add item* saved it, and My things shows the description and "ISBN 9780140328721".
+  - `12345` gives the invalid-ISBN message.
+  - No horizontal overflow at 375 px.
+  - Also did the open browser check from 3b/3c: Settings at 375 px is fine with both boxes ticked. The Lend form had the overflow bug above; it is fixed and re-checked (page width 375 = viewport), and the desktop layout is unchanged.
+
+Trade-offs:
+- The lookup is synchronous during a page load, up to 1 + 3 calls. Fine for a form someone is filling in; the timeouts keep it bounded.
+- No cache: one user rarely looks up the same ISBN twice.
+- Edition data over the search API's work-level data: more accurate for the owner's copy, but authors cost extra calls.
+
 ## 2026-11-04: Milestone 3c, lending to someone outside the app
 
 Why: next step 1 in this log. Every single-user lending tracker lets you type a borrower's name or pick a contact, because many borrowers will never install the app (e.g. [Borrow : Loan Reminder](https://apps.apple.com/app/id1168418139), [Who Has My Stuff?](https://f-droid.org/en/packages/de.freewarepoint.whohasmystuff/)). Without it, LendLoop could only record loans inside a group.
@@ -205,11 +245,10 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Check in the browser: the Lend form on My things (desktop and 375 px) and the Settings page (name in the top bar).
-2. ISBN lookup via Open Library for books.
-3. Owner reminders for outside loans: a "due tomorrow" heads-up and the weekly overdue nudge go to the owner, since the borrower can't get them. Maybe suggest names already used (datalist) so the same person isn't typed differently.
-4. Signed one-click unsubscribe link (RFC 8058) in emails.
-5. Login rate limiting, password reset by email.
-6. Czech translation (`messages_cs.properties`).
-7. Group management: rename, delete, owner removes a member, hand over ownership.
-8. Deployment on a free tier.
+1. Owner reminders for outside loans: a "due tomorrow" heads-up and the weekly overdue nudge go to the owner, since the borrower can't get them. Maybe suggest names already used (datalist) so the same person isn't typed differently.
+2. Search and filter on a group page (by name, category, available now). For books with an ISBN, maybe show covers from `covers.openlibrary.org` (opt-in, since loading them reveals the viewer's IP to Open Library).
+3. Signed one-click unsubscribe link (RFC 8058) in emails.
+4. Login rate limiting, password reset by email.
+5. Czech translation (`messages_cs.properties`).
+6. Group management: rename, delete, owner removes a member, hand over ownership.
+7. Deployment on a free tier.
