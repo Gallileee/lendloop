@@ -1,5 +1,27 @@
 # Progress log
 
+## 2026-11-05: Milestone 3e, owner reminders for loans outside the app
+
+Why: next step 1, chosen by the owner. A borrower outside the app has no email address, so after 3c nobody got the "due tomorrow" reminder or the weekly overdue ones for these loans. The owner only got one overdue notice.
+
+Done:
+- `LoanReminderJob`: for a loan to someone outside the app, the owner gets the borrower's schedule (`Loan.reminderDueOn`): the day before, then the first overdue day and weekly. One email per day, not a reminder plus the one-off owner notice.
+  - A failed email is not recorded and is retried next run. The owner is the only recipient, so a retry can't remind anyone twice (unlike in-app loans, where the owner notice isn't retried).
+  - Governed by the existing "notices about things I lent out" switch (`notify_lent_overdue`), whose label on the Settings page now says so. No migration.
+- `ReminderMailer.writeOwnerReminder`: "“Dune” is due back from Grandma tomorrow" / "“Dune” is overdue at Grandma", explaining that Grandma isn't on Lendloop, so the reminder comes to the owner.
+- Name suggestions in the Lend form: `LoanRepository.findOutsiderNamesOf` (this owner's earlier names, most recently used first, at most 50) feeds one `<datalist>` on My things.
+  - When lending, a name equal to an earlier one ignoring case keeps the earlier spelling, so "grandma" is the same Grandma.
+- Tests:
+  - `LoanReminderTests`: the old "owner hears once" test is replaced by 3 tests: the full schedule, the switch off, and a retry.
+  - `OutsideLoanTests` +1: suggestions per owner, and spelling reuse.
+  - `PostgresMigrationTest`: the name query (group by / order by max / limit) on PostgreSQL.
+  - 124 in total.
+
+Verified locally:
+- `./mvnw test`: 121 passed, 3 skipped (PostgreSQL, no Docker; CI runs them).
+
+Not verified locally: the datalist in a browser. It's the browser's own dropdown; the HTML is covered by `OutsideLoanTests`.
+
 ## 2026-11-05: Milestone 3d, book details from an ISBN (Open Library)
 
 Why: next step 2 in this log, and books are the most common thing lent between friends. Typing the title and author by hand is the slowest part of adding one. [Open Library's API](https://openlibrary.org/developers/api) is free and needs no key. It only asks frequent users to send a `User-Agent` with the app name and a contact.
@@ -245,10 +267,9 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Owner reminders for outside loans: a "due tomorrow" heads-up and the weekly overdue nudge go to the owner, since the borrower can't get them. Maybe suggest names already used (datalist) so the same person isn't typed differently.
-2. Search and filter on a group page (by name, category, available now). For books with an ISBN, maybe show covers from `covers.openlibrary.org` (opt-in, since loading them reveals the viewer's IP to Open Library).
-3. Signed one-click unsubscribe link (RFC 8058) in emails.
-4. Login rate limiting, password reset by email.
-5. Czech translation (`messages_cs.properties`).
-6. Group management: rename, delete, owner removes a member, hand over ownership.
-7. Deployment on a free tier.
+1. Search and filter on a group page (by name, category, available now). For books with an ISBN, maybe show covers from `covers.openlibrary.org` (opt-in, since loading them reveals the viewer's IP to Open Library).
+2. Signed one-click unsubscribe link (RFC 8058) in emails.
+3. Login rate limiting, password reset by email.
+4. Czech translation (`messages_cs.properties`).
+5. Group management: rename, delete, owner removes a member, hand over ownership.
+6. Deployment on a free tier.

@@ -60,6 +60,7 @@ public class ItemController {
 		model.addAttribute("today", dates.today());
 		// For the "Lend to someone" form on items that are at home.
 		model.addAttribute("dueDates", loanService.dueDateRange());
+		model.addAttribute("outsiderNames", loanService.outsiderNamesOf(me.id()));
 		return "items/list";
 	}
 

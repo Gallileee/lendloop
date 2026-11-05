@@ -66,6 +66,15 @@ public interface LoanRepository extends JpaRepository<Loan, Long> {
 	@Query("update Loan l set l.lastReminderOn = :day where l.id = :id")
 	void recordReminder(Long id, LocalDate day);
 
+	// Names of people outside the app this owner has lent to, most recently used first.
+	@Query("""
+			select l.borrowerName from Loan l
+			where l.item.owner.id = :ownerId and l.borrowerName is not null
+			group by l.borrowerName
+			order by max(l.requestedAt) desc
+			limit 50""")
+	List<String> findOutsiderNamesOf(Long ownerId);
+
 	@Query("select count(l) from Loan l where l.item.owner.id = :ownerId and l.status = 'REQUESTED'")
 	long countOpenRequestsFor(Long ownerId);
 }

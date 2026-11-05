@@ -141,7 +141,12 @@ public class LoanService {
 		if (loans.existsByItemIdAndStatus(itemId, LoanStatus.ACTIVE)) {
 			throw new LoanRuleException("It's already lent out. Mark it as returned first.");
 		}
-		return loans.saveAndFlush(Loan.toOutsider(item, name, dueDate, clock.instant()));
+		// "grandma" after an earlier "Grandma" is the same person: keep the spelling already used.
+		String known = loans.findOutsiderNamesOf(ownerId).stream()
+			.filter(name::equalsIgnoreCase)
+			.findFirst()
+			.orElse(name);
+		return loans.saveAndFlush(Loan.toOutsider(item, known, dueDate, clock.instant()));
 	}
 
 	@Transactional
@@ -193,6 +198,12 @@ public class LoanService {
 	@Transactional(readOnly = true)
 	public long openRequestsFor(Long ownerId) {
 		return loans.countOpenRequestsFor(ownerId);
+	}
+
+	// Suggestions for the "To whom" field, so the same person isn't typed differently each time.
+	@Transactional(readOnly = true)
+	public List<String> outsiderNamesOf(Long ownerId) {
+		return loans.findOutsiderNamesOf(ownerId);
 	}
 
 	@Transactional(readOnly = true)

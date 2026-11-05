@@ -44,6 +44,10 @@ class ReminderMailer {
 		deliver(writeOwnerNotice(loan, today));
 	}
 
+	void sendOwnerReminder(Loan loan, ReminderKind kind, LocalDate today) throws MailException {
+		deliver(writeOwnerReminder(loan, kind, today));
+	}
+
 	private void deliver(SimpleMailMessage mail) {
 		JavaMailSender sender = mailSender.getIfAvailable();
 		if (sender == null) {
@@ -84,6 +88,30 @@ class ReminderMailer {
 		String body = item + ", which you lent to " + borrower + ", was due back on " + due + " ("
 				+ daysLate(loan, today) + "). You may want to ask " + borrower
 				+ " about it. When you have it back, mark it as returned.";
+		return mail(loan.getItem().getOwner().getEmail(), loan.getItem().getOwner().getDisplayName(), subject, body);
+	}
+
+	// For a loan to someone outside the app: the reminder the borrower would get, sent to the
+	// owner instead, because only the owner can pass it on.
+	SimpleMailMessage writeOwnerReminder(Loan loan, ReminderKind kind, LocalDate today) {
+		String item = quotedItem(loan);
+		String borrower = singleLine(loan.getBorrowerDisplayName());
+		String due = dates.format(loan.getDueDate());
+		String why = borrower + " isn't on Lendloop, so this reminder comes to you.";
+
+		String subject;
+		String body;
+		if (kind == ReminderKind.DUE_TOMORROW) {
+			subject = item + " is due back from " + borrower + " tomorrow";
+			body = item + ", which you lent to " + borrower + ", is due back tomorrow, " + due + ". " + why
+					+ " When you have it back, mark it as returned.";
+		}
+		else {
+			subject = item + " is overdue at " + borrower;
+			body = item + ", which you lent to " + borrower + ", was due back on " + due + " ("
+					+ daysLate(loan, today) + "). " + why + " You may want to ask " + borrower
+					+ " about it. Until it's marked as returned, you'll get this once a week.";
+		}
 		return mail(loan.getItem().getOwner().getEmail(), loan.getItem().getOwner().getDisplayName(), subject, body);
 	}
 

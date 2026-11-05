@@ -191,4 +191,23 @@ class OutsideLoanTests extends WebTest {
 				values (?, 'Grandma', 'REQUESTED', current_timestamp)""", catan.getId()))
 			.isInstanceOf(DataIntegrityViolationException.class);
 	}
+
+	@Test
+	void namesUsedBeforeAreSuggestedAndReusedWithTheirSpelling() throws Exception {
+		LocalDate due = dates.today().plusDays(7);
+		Item dune = items.save(new Item(alex, "Dune", null, Category.BOOK, true));
+		lend(alex, catan, "Grandma", due).andExpect(redirectedUrl("/items"));
+
+		// The Lend form offers the name; Sam (another owner) doesn't see Alex's names.
+		mvc.perform(get("/items").with(as(alex)))
+			.andExpect(content().string(containsString("list=\"outsider-names\"")))
+			.andExpect(content().string(containsString("<option value=\"Grandma\"></option>")));
+		mvc.perform(get("/items").with(as(sam)))
+			.andExpect(content().string(not(containsString("<option value=\"Grandma\""))));
+
+		// Typed differently, it's still the same person.
+		lend(alex, dune, "  grandma ", due).andExpect(redirectedUrl("/items"));
+		assertThat(loans.findAll()).extracting(Loan::getBorrowerDisplayName).containsOnly("Grandma");
+		assertThat(loans.findOutsiderNamesOf(alex.getId())).containsExactly("Grandma");
+	}
 }

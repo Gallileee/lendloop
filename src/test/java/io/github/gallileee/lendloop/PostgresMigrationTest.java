@@ -96,6 +96,8 @@ class PostgresMigrationTest {
 		loanService.markReturned(outside.getId(), owner.getId());
 		assertThat(loanService.overview(owner.getId()).history()).extracting(Loan::getBorrowerDisplayName)
 			.contains("Neighbour");
+		// Name suggestions: group by + order by an aggregate + limit, on PostgreSQL.
+		assertThat(loans.findOutsiderNamesOf(owner.getId())).containsExactly("Neighbour");
 	}
 
 	@Test

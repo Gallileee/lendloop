@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -210,28 +211,74 @@ class LoanReminderTests extends WebTest {
 		assertThat(mail.getBcc()).isNull();
 	}
 
-	@Test
-	void forSomeoneOutsideTheAppOnlyTheOwnerHearsOnce() {
-		Item book = items.save(new Item(alex, "Dune", null, Category.BOOK, true));
-		Loan dune = loans.save(Loan.toOutsider(book, "Grandma", DUE.minusDays(5), NOW));
-		LocalDate firstLateDay = DUE.minusDays(4); // Catan is not due yet that day
-
-		assertThat(job.sendReminders(DUE.minusDays(6))).as("nobody to remind the day before").isZero();
-		verify(mailSender, never()).send(any(SimpleMailMessage.class));
-
-		assertThat(job.sendReminders(firstLateDay)).isOne();
-		SimpleMailMessage mail = onlyMail();
-		assertThat(mail.getTo()).containsExactly("alex@example.com");
-		assertThat(mail.getSubject()).isEqualTo("“Dune” is overdue at Grandma");
-		assertThat(mail.getText()).contains("“Dune”, which you lent to Grandma, was due back on 12 Nov 2026 (1 day ago).");
-		assertThat(loans.findById(dune.getId()).orElseThrow().getLastReminderOn()).isEqualTo(firstLateDay);
-
-		// The weekly overdue reminders are for borrowers, so the owner isn't emailed again.
-		// (Catan goes back first: it would be overdue by then and send its own emails.)
+	// Alex lends Dune to Grandma (not on Lendloop), due 12 Nov; Catan (Sam, 17 Nov) goes back
+	// first so its own emails don't mix in.
+	private Loan duneLentToGrandma() {
 		Loan returned = loans.findById(catan.getId()).orElseThrow();
 		returned.markReturned(NOW);
 		loans.save(returned);
-		assertThat(job.sendReminders(firstLateDay.plusDays(7))).isZero();
+		Item book = items.save(new Item(alex, "Dune", null, Category.BOOK, true));
+		return loans.save(Loan.toOutsider(book, "Grandma", DUE.minusDays(5), NOW));
+	}
+
+	@Test
+	void forSomeoneOutsideTheAppTheOwnerGetsTheRemindersInstead() {
+		Loan dune = duneLentToGrandma();
+		LocalDate due = dune.getDueDate();
+
+		assertThat(job.sendReminders(due.minusDays(1))).isOne();
+		SimpleMailMessage tomorrow = onlyMail();
+		assertThat(tomorrow.getTo()).containsExactly("alex@example.com");
+		assertThat(tomorrow.getSubject()).isEqualTo("“Dune” is due back from Grandma tomorrow");
+		assertThat(tomorrow.getText())
+			.startsWith("Hi Alex,")
+			.contains("“Dune”, which you lent to Grandma, is due back tomorrow, 12 Nov 2026.")
+			.contains("Grandma isn't on Lendloop, so this reminder comes to you.")
+			.contains("https://lendloop.test/settings");
+
+		// One email on the first late day, not a reminder plus a separate owner notice.
+		assertThat(job.sendReminders(due.plusDays(1))).isOne();
+		SimpleMailMessage late = onlyMail();
+		assertThat(late.getTo()).containsExactly("alex@example.com");
+		assertThat(late.getSubject()).isEqualTo("“Dune” is overdue at Grandma");
+		assertThat(late.getText())
+			.contains("“Dune”, which you lent to Grandma, was due back on 12 Nov 2026 (1 day ago).")
+			.contains("you'll get this once a week");
+
+		for (int day = 2; day <= 7; day++) {
+			assertThat(job.sendReminders(due.plusDays(day))).as("day %d after the due date", day).isZero();
+		}
+		// Unlike in-app loans, the owner keeps getting the weekly reminder.
+		assertThat(job.sendReminders(due.plusDays(8))).isOne();
+		assertThat(onlyMail().getText()).contains("(8 days ago)");
+		assertThat(loans.findById(dune.getId()).orElseThrow().getLastReminderOn()).isEqualTo(due.plusDays(8));
+	}
+
+	@Test
+	void anOwnerWhoTurnedNoticesOffGetsNoRemindersForOutsideLoans() {
+		Loan dune = duneLentToGrandma();
+		changeSettings(alex, true, false);
+
+		assertThat(job.sendReminders(dune.getDueDate().minusDays(1))).isZero();
+		assertThat(job.sendReminders(dune.getDueDate().plusDays(1))).isZero();
 		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+		// Still recorded, so turning it back on doesn't send a backlog the same day.
+		assertThat(loans.findById(dune.getId()).orElseThrow().getLastReminderOn())
+			.isEqualTo(dune.getDueDate().plusDays(1));
+	}
+
+	@Test
+	void aFailedOwnerReminderForAnOutsideLoanIsRetried() {
+		Loan dune = duneLentToGrandma();
+		LocalDate tomorrowDay = dune.getDueDate().minusDays(1);
+		doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
+
+		assertThat(job.sendReminders(tomorrowDay)).isZero();
+		assertThat(loans.findById(dune.getId()).orElseThrow().getLastReminderOn()).isNull();
+
+		// Only the owner is emailed for this loan, so retrying can't remind anyone twice.
+		reset(mailSender);
+		assertThat(job.sendReminders(tomorrowDay)).isOne();
+		assertThat(onlyMail().getSubject()).isEqualTo("“Dune” is due back from Grandma tomorrow");
 	}
 }
