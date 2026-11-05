@@ -15,10 +15,10 @@ Done:
   - Order: name ignoring case, then id (a `Sort` with `ignoreCase()`).
 - `GroupService.page(groupId, userId, filter)`: `GroupPage` now carries the filter, the matching `items` and `lendableCount` (one extra count query only when a filter is active).
 - Group page: a GET search form (`role="search"`, labelled fields, values kept), "2 of 9" in the count, *Clear*, and "Nothing matches your search" separate from "Nobody has anything to lend yet". One column on phones.
-- Tests: `ItemFilterTest` (13, no Spring), `GroupSearchTests` (10, `WebTest`), `PostgresMigrationTest` checks the escaped LIKE, the ISBN branch and `not exists` on PostgreSQL. 148 in total.
+- Tests: `ItemFilterTest` (13, no Spring), `GroupSearchTests` (10, `WebTest`), `PostgresMigrationTest` checks the escaped LIKE, the ISBN branch and `not exists` on PostgreSQL. 147 in total.
 
 Verified locally:
-- `./mvnw test`: 148 run, 0 failures, 3 skipped (PostgreSQL, no Docker; CI runs them).
+- `./mvnw test`: 147 run, 0 failures, 3 skipped (PostgreSQL, no Docker). CI: 147 run, 0 skipped.
 - Mutation check: removing the `%` escaping makes `GroupSearchTests.wildcardsInTheSearchAreTakenLiterally` fail. Restored afterwards.
 
 Not verified locally: the form in a browser (starting the demo server was declined in this automated run). To check by hand: start the `lendloop-memory-demo` launch config (port 8093), register two accounts, put a few items in a group, then try a search, a category, "Free right now" and the layout at 375 px and around 600 px wide (four columns in one row on desktop).
