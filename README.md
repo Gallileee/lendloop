@@ -41,9 +41,10 @@ People keep asking online for an app that tracks what they own, what they want a
   - the day before the due date ("“Catan” is due back tomorrow");
   - on the first day a loan is overdue, then once a week until it's returned.
   - The owner gets one email on the first overdue day too ("“Catan” is overdue at Sam"), not the weekly ones.
+  - Lent to someone outside the app? They have no email here, so the owner gets their reminders instead, to pass on in person: "“Dune” is due back from Grandma tomorrow", then overdue on the first day and weekly until it's marked as returned.
   - Each email is recorded on the loan as it's sent, so a second run or a restart the same day sends nothing twice. A failed email is retried on the next run and doesn't stop the others.
   - Without a mail server configured, the emails are written to the log instead, so the app still runs with zero setup. `docker compose up -d` starts [Mailpit](https://mailpit.axllent.org/), which catches them at http://localhost:8025.
-- **Settings** (click your name in the top bar): change your name, and turn each kind of email on or off (reminders about things you borrowed; notices about things you lent out). Both are on by default, and every email links to this page.
+- **Settings** (click your name in the top bar): change your name, and turn each kind of email on or off (reminders about things you borrowed; notices about things you lent out, including the reminders for people outside the app). Both are on by default, and every email links to this page.
   - A new name shows in the top bar at once: the logged-in principal in the session is replaced on save.
 - **The loan rules are a small state machine:** `REQUESTED -> ACTIVE -> RETURNED`, or `REQUESTED -> DECLINED / CANCELLED`. A loan to someone outside the app starts at `ACTIVE`.
   - The `Loan` entity refuses every other change.
@@ -110,8 +111,8 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `ItemControllerTests`: creating, editing and deleting items, and that another user can't see or change them.
 - `LoanTest`: the loan state machine on its own, including every forbidden transition (parameterized), with no Spring or database.
 - `LoanFlowTests`: the whole loan flow over HTTP, who may do what, due-date limits, one person at a time, overdue display, and no deleting lent-out items. (See PROGRESS.md for the bug that led to `WebTest`.)
-- `LoanReminderTests`: the reminder job against the database with a mocked `JavaMailSender`: the "due tomorrow" email and its text, no second email on the same day, overdue on the first day and then weekly, the owner's one-off overdue notice (also for loans to someone outside the app, who gets nothing), users who turned emails off, nothing for returned loans or requests, a failed email retried without blocking the others, and no header injection through item names.
-- `OutsideLoanTests`: lending to someone outside the app over HTTP: the form on My things, name clean-up, how it shows on My things, Loans and the group page (members don't see the name), returning and lending again, input limits, one active loan per item, owner-only (404), and the database's "exactly one borrower" checks.
+- `LoanReminderTests`: the reminder job against the database with a mocked `JavaMailSender`: the "due tomorrow" email and its text, no second email on the same day, overdue on the first day and then weekly, the owner's one-off overdue notice, the owner getting the due-tomorrow and weekly overdue reminders for loans to someone outside the app (and a failed one retried), users who turned emails off, nothing for returned loans or requests, a failed email retried without blocking the others, and no header injection through item names.
+- `OutsideLoanTests`: lending to someone outside the app over HTTP: the form on My things, name clean-up, how it shows on My things, Loans and the group page (members don't see the name), returning and lending again, input limits, one active loan per item, owner-only (404), the database's "exactly one borrower" checks, and earlier names suggested (per owner) and reused with their spelling.
 - `SettingsTests`: the Settings page needs a login, shows both emails on for a new account, saves the name and unticked boxes, refreshes the name in the session, and refuses a blank name.
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
@@ -145,7 +146,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - The reminder job assumes one running instance of the app; two instances would both send.
 - "Today" and due dates use the server's time zone.
 - Only the owner can mark a loan as returned. If they forget, it stays lent out.
-- A borrower outside the app is just a name: there's no contact list, so the same person typed twice is two different names, and they get no reminders.
+- A borrower outside the app is just a name, with no contact details, so their reminders go to the owner. Earlier names are suggested and a name typed in different case is merged, but a typo ("Granma") is still a new person.
 - Invite tokens are stored in plain text so the owner can see the link again. Anyone with read access to the database could use a link until it expires.
 - The invite expiry is shown in the server's time zone. Behind a reverse proxy, set `server.forward-headers-strategy=framework` so invite links use the public host and https.
 - Groups can't be renamed or deleted, and members can't be removed by the owner yet.

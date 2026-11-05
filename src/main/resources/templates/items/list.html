@@ -42,7 +42,7 @@
               <input type="hidden" name="itemId" th:value="${item.id}">
               <label>To whom <span class="muted">(someone not on Lendloop)</span>
                 <input type="text" name="borrowerName" required maxlength="60" autocomplete="off"
-                       placeholder="e.g. Grandma, Petr from work">
+                       list="outsider-names" placeholder="e.g. Grandma, Petr from work">
               </label>
               <label>Return by
                 <input type="date" name="dueDate" required th:value="${dueDates.suggested}"
@@ -61,6 +61,10 @@
         </div>
       </li>
     </ul>
+    <!-- People you lent to before, offered while typing in any Lend form. -->
+    <datalist id="outsider-names">
+      <option th:each="name : ${outsiderNames}" th:value="${name}"></option>
+    </datalist>
   </main>
   <script>
     // Ask before deleting. Without JavaScript the form still works, just without the question.
