@@ -3,6 +3,7 @@ package io.github.gallileee.lendloop;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.gallileee.lendloop.security.LoginThrottle;
+import io.github.gallileee.lendloop.security.PasswordResetService;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +25,8 @@ import org.springframework.test.web.servlet.MockMvc;
 public abstract class WebTest {
 
 	// Children before parents, so foreign keys never block a delete.
-	private static final List<String> TABLES = List.of("loan", "item", "group_member", "app_group", "app_user");
+	private static final List<String> TABLES = List.of("loan", "item", "group_member", "app_group",
+			"password_reset_token", "app_user");
 
 	@Autowired
 	protected MockMvc mvc;
@@ -35,10 +37,14 @@ public abstract class WebTest {
 	@Autowired
 	LoginThrottle loginThrottle;
 
+	@Autowired
+	PasswordResetService passwordResets;
+
 	// MockMvc requests all come from one IP; failed logins must not carry over to the next test.
 	@AfterEach
 	void forgetFailedLogins() {
 		loginThrottle.clear();
+		passwordResets.clearRequestLimits();
 	}
 
 	@AfterEach

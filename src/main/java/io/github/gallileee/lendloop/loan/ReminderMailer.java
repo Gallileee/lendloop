@@ -1,44 +1,31 @@
 package io.github.gallileee.lendloop.loan;
 
+import io.github.gallileee.lendloop.mail.Mailer;
 import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.EmailList;
 import io.github.gallileee.lendloop.user.UnsubscribeLinks;
 import io.github.gallileee.lendloop.web.Dates;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
-import org.springframework.mail.MailPreparationException;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
-// Writes and sends the reminder emails. Spring Boot only creates a JavaMailSender when
-// spring.mail.host is set; without one (the local default) the email is written to the log
-// instead, so the app runs without a mail server.
+// Writes the reminder emails; Mailer sends them (or logs them when no mail server is set).
 @Component
 class ReminderMailer {
 
-	private static final Logger log = LoggerFactory.getLogger(ReminderMailer.class);
-
-	private final ObjectProvider<JavaMailSender> mailSender;
+	private final Mailer mailer;
 	private final Dates dates;
 	private final UnsubscribeLinks unsubscribeLinks;
-	private final String from;
 	private final String loansUrl;
 	private final String settingsUrl;
 
-	ReminderMailer(ObjectProvider<JavaMailSender> mailSender, Dates dates, UnsubscribeLinks unsubscribeLinks,
-			@Value("${lendloop.mail.from}") String from, @Value("${lendloop.base-url}") String baseUrl) {
-		this.mailSender = mailSender;
+	ReminderMailer(Mailer mailer, Dates dates, UnsubscribeLinks unsubscribeLinks,
+			@Value("${lendloop.base-url}") String baseUrl) {
+		this.mailer = mailer;
 		this.dates = dates;
 		this.unsubscribeLinks = unsubscribeLinks;
-		this.from = from;
 		String base = baseUrl.replaceAll("/+$", "");
 		this.loansUrl = base + "/loans";
 		this.settingsUrl = base + "/settings";
@@ -62,35 +49,7 @@ class ReminderMailer {
 	}
 
 	private void deliver(Email mail) {
-		JavaMailSender sender = mailSender.getIfAvailable();
-		if (sender == null) {
-			log.info("Mail is not configured (spring.mail.host), so not sending:\nTo: {}\nSubject: {}\n\n{}",
-					mail.to(), mail.subject(), mail.text());
-			return;
-		}
-		sender.send(toMime(sender, mail));
-	}
-
-	// A MIME message rather than a SimpleMailMessage, because only it can carry extra headers.
-	private MimeMessage toMime(JavaMailSender sender, Email mail) {
-		MimeMessage message = sender.createMimeMessage();
-		try {
-			MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
-			helper.setFrom(from);
-			helper.setTo(mail.to());
-			helper.setSubject(mail.subject());
-			helper.setText(mail.text());
-			// RFC 2369 + RFC 8058: mail apps show their own "Unsubscribe" button, and the provider
-			// POSTs "List-Unsubscribe=One-Click" to the link. Gmail and Yahoo require this of bulk
-			// senders. (For providers to trust it, the domain must also sign mail with DKIM, which
-			// is set up on the mail server, not here.)
-			message.setHeader("List-Unsubscribe", "<" + mail.unsubscribeUrl() + ">");
-			message.setHeader("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
-		}
-		catch (MessagingException e) {
-			throw new MailPreparationException("Could not build the email to " + mail.to(), e);
-		}
-		return message;
+		mailer.send(mail.to(), mail.subject(), mail.text(), mail.unsubscribeUrl());
 	}
 
 	Email write(Loan loan, ReminderKind kind, LocalDate today) {
@@ -170,6 +129,6 @@ class ReminderMailer {
 	}
 
 	private static String singleLine(String text) {
-		return text.replaceAll("\\p{Cntrl}+", " ").strip();
+		return Mailer.singleLine(text);
 	}
 }

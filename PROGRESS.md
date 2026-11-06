@@ -1,5 +1,40 @@
 # Progress log
 
+## 2026-11-06: Milestone 3i, password reset by email
+
+Why: next step 1, picked by the owner. A forgotten password meant a lost account, which blocks any deployment.
+
+Done:
+- Flyway `V8__password_reset.sql`: `password_reset_token` (user, `token_hash` unique, `expires_at`, `created_at`), deleted with the user.
+- `PasswordResetService` (security package):
+  - **Request:** limited to 3 per email and 10 per IP an hour by an `AttemptLimiter`. Expired tokens are deleted, the user's older tokens too (only the newest link works). Then 32 `SecureRandom` bytes as unpadded base64url, a SHA-256 hex hash stored, and the link emailed (30 minutes).
+  - Unknown email, limit reached: nothing is sent, and the caller can't tell.
+  - **Reset:** the token's format is checked before any lookup. Then lookup by hash and expiry check, the new password encoded, all the user's tokens deleted (single use), and the email's login pause cleared.
+  - SHA-256, not BCrypt, for the token: a 256-bit random token can't be guessed from a fast hash, unlike a password.
+- `PasswordResetController`: `/forgot-password` (GET form, POST, then PRG to `/forgot-password/sent`), `/reset-password` (GET form with a hidden token, POST). An unknown, used or expired link gets a 404 "doesn't work any more" page. Password errors re-render the form with the link still usable. A failing mail server is logged and shown like a success (the transaction rolls back, so no dead token is left).
+- `ResetPasswordForm`: the sign-up password rules (10+ characters, ≤72 UTF-8 bytes, repeated).
+- Login page: *Forgot your password?*, a link from the pause message, and "Password changed" after a reset.
+- Refactoring:
+  - **`mail.Mailer`** now builds and sends every email, with the `List-Unsubscribe` headers only when an unsubscribe URL is given. A reset email has none: the user asked for it, so it isn't a notification. `ReminderMailer` only writes the texts now.
+  - **`AttemptLimiter`** is the sliding window taken out of `LoginThrottle`, which now extends it.
+- `WebTest` empties `password_reset_token` and clears the reset limits.
+- Tests: `PasswordResetTests` (14). `PostgresMigrationTest` runs two requests on PostgreSQL (the delete queries, then "only the newest link"). 197 in total.
+
+Verified locally:
+- `./mvnw test`: 197 run, 0 failures, 4 skipped (PostgreSQL, no Docker; CI runs them).
+- Mutation check: without deleting the tokens after a reset, `aLinkWorksOnlyOnce` fails (the link worked twice). Restored afterwards.
+- On the running demo (`lendloop-memory-demo`), through the app's own forms (in-page requests, because the browser pane was hidden):
+  - Sign-up, then *Forgot your password* with a differently cased email showed the "Check your email" page. The logged email had the link.
+  - The link showed the form, and a short password gave "Use at least 10 characters".
+  - A valid one led to the login page's "Password changed".
+  - The same link again gave 404 "This link doesn't work any more". The old password failed and the new one logged in. No server errors.
+
+Not verified: a screenshot of the new pages (the pane was hidden) and delivery through a real SMTP server.
+
+Trade-offs:
+- Open sessions elsewhere stay logged in after a reset (no session registry yet).
+- Timing can still tell whether an account exists (sending takes longer). Sending asynchronously would fix it, at the cost of losing the rollback on a failed send.
+
 ## 2026-11-06: Milestone 3h, failed-login limits
 
 Why: next step 1, picked by the owner. Without a limit, a script could try passwords on an account as fast as BCrypt allows. OWASP's authentication cheat sheet recommends throttling failed logins per account. Unlike a permanent lockout, a short pause can't be abused to lock someone out for good.
@@ -356,7 +391,7 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Password reset by email (a signed, single-use, short-lived token; reuse the mail setup and the throttle idea for reset requests).
+1. Log out other sessions after a password reset, and a "change password" form on Settings.
 2. Group management: rename, delete, owner removes a member, hand over ownership.
 3. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
 4. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
