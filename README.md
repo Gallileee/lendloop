@@ -19,6 +19,11 @@ People keep asking online for an app that tracks what they own, what they want a
     - While paused, even the right password is refused without being checked, so a lucky guess isn't revealed.
     - Unknown emails count the same as real ones, so the answer doesn't tell which accounts exist.
     - A successful login clears that email's count, but not the IP's.
+  - **Confirm your email:** sign-up emails a one-time link (48 hours; only its SHA-256 hash is stored).
+    - Until it's opened, the app works as usual but **sends no reminders or notices** to that address, and every page shows a banner. A typo, or someone else's address, so never gets our emails.
+    - Opening the link shows a *Confirm my email* button; the POST confirms. A GET that confirmed would let a mail provider's link scanner confirm an address nobody read.
+    - Settings shows the address as confirmed or not, with *Send the link again* (a newer link turns off the older; at most 3 an hour per account, 10 per IP).
+    - Using a password reset link also confirms the address, since it proves the same thing. Accounts from before this feature count as confirmed.
   - **Forgot your password?** (link on the login page) emails a link to choose a new one:
     - The link holds 256 random bits and works **once, for 30 minutes**. Asking again turns off the older link.
     - Only a SHA-256 hash of it is stored, so someone who can read the database still can't use a link.
@@ -138,6 +143,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `UnsubscribeLinksTest`: the signed links on their own: accepted for the right user and list only, another secret or a cut-off signature rejected, malformed parameters (parameterized), too short a secret refused at startup, and a random secret per run.
 - `UnsubscribeTests`: the link over HTTP, logged out: GET only asks, the button turns off just that list, the mail provider's one-click POST works without a CSRF token and can be repeated, forged links and deleted accounts get 404, and other POSTs still need a CSRF token.
 - `PasswordResetTests`: the whole reset over HTTP with a mocked `Mailer`: the emailed link sets a new password (the old one stops working), a link works once, an unknown email gets the same answer and no email, a newer link replaces the older one, expired links, only the hash stored, password rules with the link still usable afterwards, malformed tokens, 3 requests an hour, a failed email looking the same (and rolled back), a reset ending a login pause, and CSRF.
+- `EmailVerificationTests`: sign-up emails a link that confirms the address (opening it alone doesn't), the email's text, a logged-in user going back to Settings, a link working once, broken/expired links, only the hash stored, the banner until confirmed, a newer link replacing the older, 3 resends an hour, no links once confirmed, a failing mail server still creating the account (and leaving no token), and login + CSRF on resend. `LoanReminderTests` checks that unconfirmed borrowers and owners get no emails, and `PasswordResetTests` that a reset confirms the address.
 - `AccountSecurityTests`: with real login sessions as "devices": a password change logs out the others but keeps this one (with a new session id), wrong current passwords change nothing and count like failed logins, the password rules, log out everywhere else, a reset logging out every device, a deleted account's session ending, a name change keeping the session, and login + CSRF on both forms.
 - `LoginThrottleTest`: the sliding window with a test clock (no Spring): when the pause starts and ends, case-insensitive emails, one IP and many accounts, success clears the email but not the IP, the longer of two waits, purging old entries, and very long emails.
 - `LoginRateLimitTests`: the limits over HTTP: the 5th wrong password pauses the email (even the right password, from any IP), unknown emails are paused the same way, a success forgets typos, one IP guessing at 30 accounts is paused, the login page explains the pause, and a missing CSRF token is still rejected first and not counted.
@@ -147,14 +153,14 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `GroupSearchTests`: the group search against the database: name and description ignoring case, wildcards taken literally, ISBN in any format, category, "free right now" with a lent-out item, the "2 of 4" count, the form keeping its values, "nothing matches" vs an empty group, bad parameters ignored, and outsiders still getting 404.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
-- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered search), loan, reminder and password-reset queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
+- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered search), loan, reminder, password-reset and email-confirmation queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
 
 ## Project structure
 
 ```
 src/main/java/io/github/gallileee/lendloop/
   user/       account entity, sign-up and settings forms, validation and services, signed unsubscribe links
-  security/   Spring Security config, the logged-in user, failed-login limits, password reset
+  security/   Spring Security config, the logged-in user, failed-login limits, password reset, email confirmation
   mail/       Mailer: plain-text emails, logged when no mail server is set
   item/       items: entity, repository, service (ownership checks), controller
   book/       ISBN parsing and validation, Open Library lookup (BookLookup, OpenLibraryClient)
@@ -183,8 +189,8 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - The invite expiry is shown in the server's time zone. Behind a reverse proxy, set `server.forward-headers-strategy=framework` so invite links use the public host and https.
 - Groups can't be renamed or deleted, and members can't be removed by the owner yet.
 - Sign-up says when an email is already registered, which reveals that the account exists. That's acceptable for an app between friends, but it should change before a public launch.
-- There's no email verification yet: anyone can sign up with someone else's address (they just can't reset its password without the inbox).
-- Without a mail server, the reset email (with its link) only goes to the log. That's meant for local runs; configure mail before others use the app.
+- Signing up with someone else's address still creates an account (it just never gets emails, and its password can't be reset without the inbox). Unconfirmed accounts aren't deleted after a while yet.
+- Without a mail server, the reset and confirmation emails (with their links) only goes to the log. That's meant for local runs; configure mail before others use the app.
 - "Is there an account?" is hidden from the reset page's text, but not from its timing: sending an email takes longer than not sending one.
 - Failed-login counts are kept in memory: a restart forgets them, and two app instances would each count separately.
 - Someone who knows an email address can pause that person's logins for 15 minutes by failing on purpose. That's the usual trade-off of per-account limits. The pause is short, and failures while paused don't extend it.
@@ -196,7 +202,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done).
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done).
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).

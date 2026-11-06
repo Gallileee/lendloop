@@ -104,6 +104,16 @@ class PasswordResetTests extends WebTest {
 	}
 
 	@Test
+	void usingAResetLinkAlsoConfirmsTheEmail() throws Exception {
+		assertThat(users.findByEmail("kim@example.com").orElseThrow().isEmailVerified()).isFalse();
+		requestLink("kim@example.com");
+
+		reset(emailedToken(), NEW_PASSWORD, NEW_PASSWORD).andExpect(redirectedUrl("/login"));
+		assertThat(users.findByEmail("kim@example.com").orElseThrow().isEmailVerified())
+			.as("only the owner of the inbox could have used the link").isTrue();
+	}
+
+	@Test
 	void theEmailExplainsTheLinkAndHasNoUnsubscribeHeader() throws Exception {
 		requestLink("kim@example.com");
 
@@ -167,7 +177,7 @@ class PasswordResetTests extends WebTest {
 		String token = emailedToken();
 
 		String stored = jdbc.queryForObject("select token_hash from password_reset_token", String.class);
-		assertThat(stored).isNotEqualTo(token).isEqualTo(PasswordResetService.hash(token)).hasSize(64);
+		assertThat(stored).isNotEqualTo(token).isEqualTo(OneTimeTokens.hash(token)).hasSize(64);
 	}
 
 	@Test

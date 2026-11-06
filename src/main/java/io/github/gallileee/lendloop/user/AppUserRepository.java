@@ -13,4 +13,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 	// Checked on every logged-in request, so only the one number is loaded.
 	@Query("select u.sessionVersion from AppUser u where u.id = :id")
 	Optional<Integer> findSessionVersion(Long id);
+
+	// For the "confirm your email" banner on every page.
+	boolean existsByIdAndEmailVerifiedAtIsNull(Long id);
 }

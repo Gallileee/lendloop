@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import org.springframework.dao.DataIntegrityViolationException;
 import io.github.gallileee.lendloop.item.ItemForm;
+import io.github.gallileee.lendloop.security.EmailVerificationService;
 import io.github.gallileee.lendloop.security.PasswordResetService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import io.github.gallileee.lendloop.item.ItemService;
@@ -57,6 +58,9 @@ class PostgresMigrationTest {
 	@Autowired
 	JdbcTemplate jdbc;
 
+	@Autowired
+	EmailVerificationService emailVerifications;
+
 	// Password reset tokens: the delete queries and the insert, on PostgreSQL. (Without a mail
 	// server the email only goes to the log.)
 	@Test
@@ -70,6 +74,20 @@ class PostgresMigrationTest {
 				select count(*) from password_reset_token t join app_user u on u.id = t.user_id
 				where u.email = 'pg-reset@example.com'""", Integer.class)).as("only the newest link").isOne();
 		assertThat(passwordResets.isUsable("x".repeat(43))).isFalse();
+	}
+
+	// Email confirmation tokens (V10) and the banner's query, on PostgreSQL.
+	@Test
+	void emailVerificationTokensWorkOnPostgres() {
+		AppUser user = users.save(new AppUser("pg-verify@example.com", "Verify", "{noop}irrelevant"));
+
+		emailVerifications.sendLink(user.getId());
+		emailVerifications.resend(user.getId(), "192.0.2.1");
+
+		assertThat(jdbc.queryForObject("select count(*) from email_verification_token where user_id = ?",
+				Integer.class, user.getId())).as("only the newest link").isOne();
+		assertThat(users.existsByIdAndEmailVerifiedAtIsNull(user.getId())).isTrue();
+		assertThat(emailVerifications.verify("x".repeat(43))).isEmpty();
 	}
 
 	// The loan queries (nulls last, limit, reminders) and the uniqueness constraints on PostgreSQL.

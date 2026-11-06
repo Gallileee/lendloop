@@ -1,5 +1,6 @@
 package io.github.gallileee.lendloop.loan;
 
+import io.github.gallileee.lendloop.user.EmailList;
 import io.github.gallileee.lendloop.web.Dates;
 import java.time.LocalDate;
 import org.slf4j.Logger;
@@ -12,7 +13,8 @@ import org.springframework.stereotype.Component;
 // Loan.reminderDueOn), and owners on the first day their item is overdue (Loan.ownerNoticeDueOn).
 // Someone outside the app has no email address here, so for those loans the owner gets the
 // borrower's reminders instead (due tomorrow, then overdue weekly), to pass on in person.
-// Each user chooses which of these they get on the Settings page.
+// Each user chooses which of these they get on the Settings page, and nobody is emailed before
+// confirming their address (AppUser.mayBeEmailed).
 //
 // Each handled loan is recorded right away, so a crash halfway through or a second run the
 // same day doesn't send it twice. A failed borrower email is not recorded and is tried again
@@ -51,7 +53,7 @@ class LoanReminderJob {
 			}
 			if (loan.isOutsideApp()) {
 				// The owner is the only one emailed, so a failure can simply be retried next run.
-				if (loan.getItem().getOwner().isNotifyLentOverdue()) {
+				if (loan.getItem().getOwner().mayBeEmailed(EmailList.LENT)) {
 					try {
 						mailer.sendOwnerReminder(loan, kind, today);
 						sent++;
@@ -65,7 +67,7 @@ class LoanReminderJob {
 				loans.recordReminder(loan.getId(), today);
 				continue;
 			}
-			if (loan.getBorrower().isRemindBorrowed()) {
+			if (loan.getBorrower().mayBeEmailed(EmailList.BORROWED)) {
 				try {
 					mailer.send(loan, kind, today);
 					sent++;
@@ -76,7 +78,7 @@ class LoanReminderJob {
 				}
 			}
 			// The owner of an in-app loan hears once, with the borrower's first overdue reminder.
-			if (loan.ownerNoticeDueOn(today) && loan.getItem().getOwner().isNotifyLentOverdue()) {
+			if (loan.ownerNoticeDueOn(today) && loan.getItem().getOwner().mayBeEmailed(EmailList.LENT)) {
 				try {
 					mailer.sendOwnerNotice(loan, today);
 					sent++;

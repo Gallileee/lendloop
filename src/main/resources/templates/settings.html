@@ -7,6 +7,7 @@
     <h1>Settings</h1>
 
     <p th:if="${saved}" class="notice" role="status">Settings saved.</p>
+    <p th:if="${emailVerified}" class="notice" role="status">Email confirmed. Thanks!</p>
     <p th:if="${passwordChanged}" class="notice" role="status">
       Password changed. You're still logged in here; everywhere else you'll need the new password.
     </p>
@@ -37,6 +38,35 @@
         <button type="submit" class="button">Save</button>
       </div>
     </form>
+
+    <section>
+      <h2 class="section-title" id="email">Email address</h2>
+      <div class="card">
+        <p><strong th:text="${#authentication.principal.email()}">alex@example.com</strong>
+          <span th:if="${emailUnconfirmed}" class="status status-late">Not confirmed</span>
+          <span th:unless="${emailUnconfirmed}" class="status">Confirmed</span>
+        </p>
+        <th:block th:switch="${verification}">
+          <p th:case="'SENT'" class="notice" role="status">
+            Sent. Check your inbox (and the spam folder) for the newest link; older ones no longer work.
+          </p>
+          <p th:case="'TOO_MANY'" class="alert" role="alert">
+            We've sent several links in the last hour. Please wait a while before asking again.
+          </p>
+          <p th:case="'MAIL_FAILED'" class="alert" role="alert">
+            We couldn't send the email just now. Please try again later.
+          </p>
+        </th:block>
+        <th:block th:if="${emailUnconfirmed}">
+          <p class="muted">
+            Lendloop doesn't send you reminders until you open the link we emailed you when you signed up.
+          </p>
+          <form th:action="@{/settings/email/resend}" method="post">
+            <button type="submit" class="button button-secondary">Send the link again</button>
+          </form>
+        </th:block>
+      </div>
+    </section>
 
     <section>
       <h2 class="section-title" id="password">Change password</h2>

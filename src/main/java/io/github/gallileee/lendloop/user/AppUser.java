@@ -40,6 +40,10 @@ public class AppUser {
 	@Column(name = "session_version", nullable = false)
 	private int sessionVersion;
 
+	// See V10__email_verification.sql. Null until the user follows a link sent to the address.
+	@Column(name = "email_verified_at")
+	private Instant emailVerifiedAt;
+
 	protected AppUser() {
 		// for JPA
 	}
@@ -67,6 +71,28 @@ public class AppUser {
 	// "Log out everywhere". The caller logs the current session in again if it should stay.
 	public void endAllSessions() {
 		sessionVersion++;
+	}
+
+	// The user followed a link we emailed them (sign-up confirmation or password reset), so the
+	// address is theirs. The first time counts; later calls change nothing.
+	public void markEmailVerified(Instant when) {
+		if (emailVerifiedAt == null) {
+			emailVerifiedAt = when;
+		}
+	}
+
+	public boolean isEmailVerified() {
+		return emailVerifiedAt != null;
+	}
+
+	public Instant getEmailVerifiedAt() {
+		return emailVerifiedAt;
+	}
+
+	// Whether a notification of this kind may be emailed: the user wants it, and the address is
+	// confirmed, so a typo at sign-up doesn't send a stranger reminders.
+	public boolean mayBeEmailed(EmailList list) {
+		return isEmailVerified() && wants(list);
 	}
 
 	public int getSessionVersion() {

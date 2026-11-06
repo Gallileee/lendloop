@@ -305,3 +305,12 @@ a.status { text-decoration: none; }
   .item-actions { width: 100%; flex-wrap: wrap; }
   .item-actions > form { flex: 1; display: flex; }
 }
+
+/* Under the top bar until the email address is confirmed. */
+.banner {
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--notice-bg);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}

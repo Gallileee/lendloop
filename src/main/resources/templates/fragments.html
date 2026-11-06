@@ -7,7 +7,9 @@
   <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
-  <header th:fragment="topbar" class="topbar">
+  <!-- The top bar, and below it a reminder to confirm the email address until that's done. -->
+  <th:block th:fragment="topbar">
+  <header class="topbar">
     <a class="brand" th:href="@{/items}">LendLoop</a>
     <nav sec:authorize="isAuthenticated()" class="topbar-links" aria-label="Main">
       <a th:href="@{/items}" th:attr="aria-current=${section == 'items'} ? 'page' : null">My things</a>
@@ -26,6 +28,11 @@
       </form>
     </nav>
   </header>
+  <p th:if="${emailUnconfirmed}" class="banner" role="status">
+    Confirm your email address to get loan reminders: open the link we emailed you.
+    <a th:href="@{/settings#email}">Didn't get it?</a>
+  </p>
+  </th:block>
 
   <!-- A loan's due date, with an "overdue" warning in words, not only in colour. -->
   <th:block th:fragment="due(loan, today)">
