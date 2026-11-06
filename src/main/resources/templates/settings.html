@@ -7,6 +7,12 @@
     <h1>Settings</h1>
 
     <p th:if="${saved}" class="notice" role="status">Settings saved.</p>
+    <p th:if="${passwordChanged}" class="notice" role="status">
+      Password changed. You're still logged in here; everywhere else you'll need the new password.
+    </p>
+    <p th:if="${sessionsEnded}" class="notice" role="status">
+      Logged out everywhere else. This browser stays logged in.
+    </p>
 
     <form th:action="@{/settings}" th:object="${form}" method="post" class="card form" novalidate>
       <label>Your name
@@ -31,6 +37,43 @@
         <button type="submit" class="button">Save</button>
       </div>
     </form>
+
+    <section>
+      <h2 class="section-title" id="password">Change password</h2>
+      <form th:action="@{/settings/password}" th:object="${passwordForm}" method="post" class="card form" novalidate
+            aria-labelledby="password">
+        <label>Current password
+          <input type="password" th:field="*{currentPassword}" autocomplete="current-password" required
+                 th:attr="aria-invalid=${#fields.hasErrors('currentPassword')}">
+          <span class="field-error" th:if="${#fields.hasErrors('currentPassword')}" th:errors="*{currentPassword}"></span>
+        </label>
+        <label>New password
+          <input type="password" th:field="*{newPassword}" autocomplete="new-password" minlength="10" required
+                 th:attr="aria-invalid=${#fields.hasErrors('newPassword') or #fields.hasErrors('newPasswordShortEnough')}">
+          <span class="hint">At least 10 characters. Other devices are logged out when you change it.</span>
+          <span class="field-error" th:if="${#fields.hasErrors('newPassword')}" th:errors="*{newPassword}"></span>
+          <span class="field-error" th:if="${#fields.hasErrors('newPasswordShortEnough')}" th:errors="*{newPasswordShortEnough}"></span>
+        </label>
+        <label>Repeat new password
+          <input type="password" th:field="*{confirmPassword}" autocomplete="new-password" required
+                 th:attr="aria-invalid=${#fields.hasErrors('newPasswordConfirmed')}">
+          <span class="field-error" th:if="${#fields.hasErrors('newPasswordConfirmed')}" th:errors="*{newPasswordConfirmed}"></span>
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="button">Change password</button>
+        </div>
+      </form>
+    </section>
+
+    <section>
+      <h2 class="section-title">Other devices</h2>
+      <div class="card">
+        <p class="muted">Logged in on a shared or lost device? Log out everywhere except in this browser.</p>
+        <form th:action="@{/settings/sessions}" method="post">
+          <button type="submit" class="button button-secondary">Log out everywhere else</button>
+        </form>
+      </div>
+    </section>
   </main>
 </body>
 </html>
