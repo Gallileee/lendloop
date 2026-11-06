@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.github.gallileee.lendloop.WebTest;
 import io.github.gallileee.lendloop.item.Category;
@@ -16,7 +17,15 @@ import io.github.gallileee.lendloop.item.Item;
 import io.github.gallileee.lendloop.item.ItemRepository;
 import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.AppUserRepository;
+import jakarta.mail.Message.RecipientType;
+import jakarta.mail.MessagingException;
+import jakarta.mail.Session;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +33,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -56,6 +64,7 @@ class LoanReminderTests extends WebTest {
 
 	@BeforeEach
 	void setUp() {
+		stubMimeMessages();
 		alex = users.save(new AppUser("alex@example.com", "Alex", "{noop}x"));
 		sam = users.save(new AppUser("sam@example.com", "Sam", "{noop}x"));
 		catan = lend(items.save(new Item(alex, "Catan", null, Category.GAME, true)), sam, DUE);
@@ -67,18 +76,86 @@ class LoanReminderTests extends WebTest {
 		return loans.save(loan);
 	}
 
-	private SimpleMailMessage onlyMail() {
-		ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
-		verify(mailSender).send(mail.capture());
-		clearInvocations(mailSender);
-		return mail.getValue();
+	// The mock has to hand out real MimeMessages for the mailer to fill in.
+	private void stubMimeMessages() {
+		when(mailSender.createMimeMessage()).thenAnswer(invocation -> new MimeMessage((Session) null));
 	}
 
-	private List<SimpleMailMessage> allMail(int count) {
-		ArgumentCaptor<SimpleMailMessage> mail = ArgumentCaptor.forClass(SimpleMailMessage.class);
+	private Sent onlyMail() {
+		ArgumentCaptor<MimeMessage> mail = ArgumentCaptor.forClass(MimeMessage.class);
+		verify(mailSender).send(mail.capture());
+		clearInvocations(mailSender);
+		return new Sent(mail.getValue());
+	}
+
+	private List<Sent> allMail(int count) {
+		ArgumentCaptor<MimeMessage> mail = ArgumentCaptor.forClass(MimeMessage.class);
 		verify(mailSender, times(count)).send(mail.capture());
 		clearInvocations(mailSender);
-		return mail.getAllValues();
+		return mail.getAllValues().stream().map(Sent::new).toList();
+	}
+
+	// A sent MIME message, read back as plain strings for the assertions.
+	record Sent(MimeMessage message) {
+
+		String[] getTo() {
+			return addresses(RecipientType.TO);
+		}
+
+		String[] getBcc() {
+			return addresses(RecipientType.BCC);
+		}
+
+		String getFrom() {
+			try {
+				return ((InternetAddress) message.getFrom()[0]).toUnicodeString();
+			}
+			catch (MessagingException e) {
+				throw new IllegalStateException(e);
+			}
+		}
+
+		String getSubject() {
+			try {
+				return message.getSubject();
+			}
+			catch (MessagingException e) {
+				throw new IllegalStateException(e);
+			}
+		}
+
+		String getText() {
+			try {
+				return (String) message.getContent();
+			}
+			catch (MessagingException e) {
+				throw new IllegalStateException(e);
+			}
+			catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		}
+
+		String header(String name) {
+			try {
+				String[] values = message.getHeader(name);
+				return values == null ? null : String.join(", ", values);
+			}
+			catch (MessagingException e) {
+				throw new IllegalStateException(e);
+			}
+		}
+
+		private String[] addresses(RecipientType type) {
+			try {
+				var recipients = message.getRecipients(type);
+				return recipients == null ? null
+						: Arrays.stream(recipients).map(a -> ((InternetAddress) a).getAddress()).toArray(String[]::new);
+			}
+			catch (MessagingException e) {
+				throw new IllegalStateException(e);
+			}
+		}
 	}
 
 	private void changeSettings(AppUser user, boolean remindBorrowed, boolean notifyLentOverdue) {
@@ -90,10 +167,10 @@ class LoanReminderTests extends WebTest {
 	@Test
 	void theBorrowerHearsTheDayBeforeTheDueDate() {
 		assertThat(job.sendReminders(DUE.minusDays(2))).isZero();
-		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+		verify(mailSender, never()).send(any(MimeMessage.class));
 
 		assertThat(job.sendReminders(DUE.minusDays(1))).isOne();
-		SimpleMailMessage mail = onlyMail();
+		Sent mail = onlyMail();
 		assertThat(mail.getTo()).containsExactly("sam@example.com");
 		assertThat(mail.getFrom()).isEqualTo("Lendloop <no-reply@lendloop.test>");
 		assertThat(mail.getSubject()).isEqualTo("“Catan” is due back tomorrow");
@@ -101,12 +178,20 @@ class LoanReminderTests extends WebTest {
 			.startsWith("Hi Sam,")
 			.contains("“Catan”, which you borrowed from Alex, is due back tomorrow, 17 Nov 2026.")
 			.contains("https://lendloop.test/loans")
-			.contains("Turn them off in your settings: https://lendloop.test/settings");
+			.contains("You get this because reminders about things you borrowed are on.")
+			.containsPattern("Stop them: https://lendloop\\.test/unsubscribe\\?user=" + sam.getId()
+					+ "&list=BORROWED&sig=[A-Za-z0-9_-]{43}\n")
+			.contains("All email settings: https://lendloop.test/settings");
+		// RFC 8058 one-click unsubscribe, with the same link as in the text.
+		assertThat(mail.header("List-Unsubscribe"))
+			.matches("<https://lendloop\\.test/unsubscribe\\?user=" + sam.getId() + "&list=BORROWED&sig=[A-Za-z0-9_-]{43}>");
+		assertThat(mail.getText()).contains(mail.header("List-Unsubscribe").replaceAll("[<>]", ""));
+		assertThat(mail.header("List-Unsubscribe-Post")).isEqualTo("List-Unsubscribe=One-Click");
 		assertThat(loans.findById(catan.getId()).orElseThrow().getLastReminderOn()).isEqualTo(DUE.minusDays(1));
 
 		// A second run on the same day (e.g. after a restart) sends nothing.
 		assertThat(job.sendReminders(DUE.minusDays(1))).isZero();
-		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+		verify(mailSender, never()).send(any(MimeMessage.class));
 	}
 
 	@Test
@@ -117,25 +202,27 @@ class LoanReminderTests extends WebTest {
 		assertThat(job.sendReminders(DUE)).as("the due date itself").isZero();
 
 		assertThat(job.sendReminders(DUE.plusDays(1))).as("borrower and owner").isEqualTo(2);
-		List<SimpleMailMessage> mails = allMail(2);
-		SimpleMailMessage toSam = mails.get(0);
+		List<Sent> mails = allMail(2);
+		Sent toSam = mails.get(0);
 		assertThat(toSam.getTo()).containsExactly("sam@example.com");
 		assertThat(toSam.getSubject()).isEqualTo("“Catan” was due back on 17 Nov 2026");
 		assertThat(toSam.getText()).contains("was due back on 17 Nov 2026 (1 day ago). Please give it back to Alex");
-		SimpleMailMessage toAlex = mails.get(1);
+		Sent toAlex = mails.get(1);
 		assertThat(toAlex.getTo()).containsExactly("alex@example.com");
 		assertThat(toAlex.getSubject()).isEqualTo("“Catan” is overdue at Sam");
 		assertThat(toAlex.getText())
 			.startsWith("Hi Alex,")
 			.contains("“Catan”, which you lent to Sam, was due back on 17 Nov 2026 (1 day ago).")
 			.contains("https://lendloop.test/settings");
+		// The owner's link turns off the owner's notices, not the borrower's reminders.
+		assertThat(toAlex.header("List-Unsubscribe")).contains("user=" + alex.getId() + "&list=LENT&sig=");
 
 		for (int day = 2; day <= 7; day++) {
 			assertThat(job.sendReminders(DUE.plusDays(day))).as("day %d after the due date", day).isZero();
 		}
 		// The weekly reminder goes to the borrower only; the owner heard once.
 		assertThat(job.sendReminders(DUE.plusDays(8))).isOne();
-		SimpleMailMessage weekly = onlyMail();
+		Sent weekly = onlyMail();
 		assertThat(weekly.getTo()).containsExactly("sam@example.com");
 		assertThat(weekly.getText()).contains("(8 days ago)");
 	}
@@ -145,7 +232,7 @@ class LoanReminderTests extends WebTest {
 		changeSettings(sam, false, true);
 
 		assertThat(job.sendReminders(DUE.minusDays(1))).isZero();
-		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+		verify(mailSender, never()).send(any(MimeMessage.class));
 
 		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
 		assertThat(onlyMail().getTo()).containsExactly("alex@example.com");
@@ -165,7 +252,7 @@ class LoanReminderTests extends WebTest {
 	@Test
 	void aFailedOwnerNoticeIsNotRetriedSoTheBorrowerIsNotRemindedTwice() {
 		doThrow(new MailSendException("SMTP server down")).when(mailSender)
-			.send(argThat((SimpleMailMessage m) -> m.getTo()[0].equals("alex@example.com")));
+			.send(argThat((MimeMessage m) -> new Sent(m).getTo()[0].equals("alex@example.com")));
 
 		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
 		allMail(2);
@@ -184,7 +271,7 @@ class LoanReminderTests extends WebTest {
 
 		assertThat(job.sendReminders(DUE.minusDays(1))).isZero();
 		assertThat(job.sendReminders(DUE.plusDays(1))).isZero();
-		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+		verify(mailSender, never()).send(any(MimeMessage.class));
 	}
 
 	@Test
@@ -192,10 +279,10 @@ class LoanReminderTests extends WebTest {
 		Item book = items.save(new Item(alex, "Dune", null, Category.BOOK, true));
 		Loan dune = lend(book, sam, DUE);
 		doThrow(new MailSendException("SMTP server down")).when(mailSender)
-			.send(argThat((SimpleMailMessage m) -> m.getSubject().contains("Catan")));
+			.send(argThat((MimeMessage m) -> new Sent(m).getSubject().contains("Catan")));
 
 		assertThat(job.sendReminders(DUE.minusDays(1))).isOne();
-		verify(mailSender, times(2)).send(any(SimpleMailMessage.class));
+		verify(mailSender, times(2)).send(any(MimeMessage.class));
 		assertThat(loans.findById(catan.getId()).orElseThrow().getLastReminderOn()).isNull();
 		assertThat(loans.findById(dune.getId()).orElseThrow().getLastReminderOn()).isEqualTo(DUE.minusDays(1));
 	}
@@ -206,7 +293,7 @@ class LoanReminderTests extends WebTest {
 		lend(sneaky, sam, DUE.minusDays(5)); // Catan is not due yet that day
 
 		job.sendReminders(DUE.minusDays(6));
-		SimpleMailMessage mail = onlyMail();
+		Sent mail = onlyMail();
 		assertThat(mail.getSubject()).isEqualTo("“Catan Bcc: everyone@example.com” is due back tomorrow");
 		assertThat(mail.getBcc()).isNull();
 	}
@@ -227,7 +314,7 @@ class LoanReminderTests extends WebTest {
 		LocalDate due = dune.getDueDate();
 
 		assertThat(job.sendReminders(due.minusDays(1))).isOne();
-		SimpleMailMessage tomorrow = onlyMail();
+		Sent tomorrow = onlyMail();
 		assertThat(tomorrow.getTo()).containsExactly("alex@example.com");
 		assertThat(tomorrow.getSubject()).isEqualTo("“Dune” is due back from Grandma tomorrow");
 		assertThat(tomorrow.getText())
@@ -238,7 +325,7 @@ class LoanReminderTests extends WebTest {
 
 		// One email on the first late day, not a reminder plus a separate owner notice.
 		assertThat(job.sendReminders(due.plusDays(1))).isOne();
-		SimpleMailMessage late = onlyMail();
+		Sent late = onlyMail();
 		assertThat(late.getTo()).containsExactly("alex@example.com");
 		assertThat(late.getSubject()).isEqualTo("“Dune” is overdue at Grandma");
 		assertThat(late.getText())
@@ -261,7 +348,7 @@ class LoanReminderTests extends WebTest {
 
 		assertThat(job.sendReminders(dune.getDueDate().minusDays(1))).isZero();
 		assertThat(job.sendReminders(dune.getDueDate().plusDays(1))).isZero();
-		verify(mailSender, never()).send(any(SimpleMailMessage.class));
+		verify(mailSender, never()).send(any(MimeMessage.class));
 		// Still recorded, so turning it back on doesn't send a backlog the same day.
 		assertThat(loans.findById(dune.getId()).orElseThrow().getLastReminderOn())
 			.isEqualTo(dune.getDueDate().plusDays(1));
@@ -271,13 +358,14 @@ class LoanReminderTests extends WebTest {
 	void aFailedOwnerReminderForAnOutsideLoanIsRetried() {
 		Loan dune = duneLentToGrandma();
 		LocalDate tomorrowDay = dune.getDueDate().minusDays(1);
-		doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(SimpleMailMessage.class));
+		doThrow(new MailSendException("SMTP down")).when(mailSender).send(any(MimeMessage.class));
 
 		assertThat(job.sendReminders(tomorrowDay)).isZero();
 		assertThat(loans.findById(dune.getId()).orElseThrow().getLastReminderOn()).isNull();
 
 		// Only the owner is emailed for this loan, so retrying can't remind anyone twice.
 		reset(mailSender);
+		stubMimeMessages();
 		assertThat(job.sendReminders(tomorrowDay)).isOne();
 		assertThat(onlyMail().getSubject()).isEqualTo("“Dune” is due back from Grandma tomorrow");
 	}

@@ -1,5 +1,37 @@
 # Progress log
 
+## 2026-11-06: Milestone 3g, one-click unsubscribe (RFC 8058)
+
+Why: next step 1, picked by the owner. Gmail and Yahoo have required one-click unsubscribe from bulk senders since 2024, and before this, turning emails off needed a login.
+
+Done:
+- `EmailList` enum (`BORROWED`, `LENT`), one per switch on the Settings page. `AppUser.turnOff(list)` and `wants(list)`.
+- `UnsubscribeLinks`: `/unsubscribe?user=…&list=…&sig=…`, where `sig` is HMAC-SHA256 over `unsubscribe:<id>:<list>` (base64url).
+  - Checked with `MessageDigest.isEqual` (constant time). Malformed parameters give "invalid", never an exception.
+  - Nothing stored, no expiry: the worst a leaked link can do is turn one email off, and the user can turn it back on.
+  - Secret: `lendloop.unsubscribe.secret` / `UNSUBSCRIBE_SECRET`, at least 32 characters, else startup fails. Not set: a random one per run plus a warning (local runs).
+- `UnsubscribeController`:
+  - GET shows "Stop these emails?" with a POST button. Mail scanners open links, so a GET changes nothing.
+  - POST turns the list off. It's what the button and the mail provider's one-click POST (`List-Unsubscribe=One-Click`) send. It's idempotent.
+  - Bad link or deleted account: the same 404 page.
+- `SecurityConfig`: `/unsubscribe` is public and the only path without CSRF, because the provider's POST has no cookies or token. The signature does that job.
+- `ReminderMailer` now sends a `MimeMessage` (a `SimpleMailMessage` can't carry extra headers), with `List-Unsubscribe: <link>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. The footer says which kind of email this is, gives the same link and the Settings link. Borrower reminders link to `BORROWED`, owner notices and reminders to `LENT`.
+- Tests: `UnsubscribeLinksTest` (15, no Spring), `UnsubscribeTests` (6), `LoanReminderTests` now captures MIME messages and checks both headers and that the borrower and owner get different lists. 168 in total.
+
+Verified locally:
+- `./mvnw test`: 168 run, 0 failures, 3 skipped (PostgreSQL, no Docker; CI runs them).
+- Mutation check: without the CSRF exception for `/unsubscribe`, 4 of the 6 `UnsubscribeTests` fail. Restored afterwards.
+- In the browser (`lendloop-memory-demo`, which now sets a demo-only secret so a link can be computed by hand):
+  - Logged out, a computed link showed "Stop these emails?" and *Unsubscribe* turned off borrow reminders.
+  - A curl POST with `List-Unsubscribe=One-Click` and no cookies turned off the lent-out notices (200). The same signature with another user id got 404.
+  - After logging in, Settings showed both boxes unticked. No server errors.
+
+Not verified: a real mail client's Unsubscribe button. That needs a real domain with DKIM.
+
+Trade-offs:
+- Stateless signed links over a token table: no migration and nothing to clean up. The price is no per-link revocation (only rotating the secret).
+- The user id is visible in the link. It isn't secret, and the signature is what authorises.
+
 ## 2026-11-05: Milestone 3f, search and filter on the group page
 
 Why: next step 1 in this log. Once a group has more than a screenful of things, scrolling is the only way to find the drill. Every lending / library app has a search box and category filter, and "is it free now?" is the first question before asking.
@@ -295,9 +327,8 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Signed one-click unsubscribe link (RFC 8058) in emails.
-2. Login rate limiting, password reset by email.
-3. Group management: rename, delete, owner removes a member, hand over ownership.
-4. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
-5. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
-6. Deployment on a free tier.
+1. Login rate limiting, password reset by email.
+2. Group management: rename, delete, owner removes a member, hand over ownership.
+3. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
+4. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
+5. Deployment on a free tier (set `UNSUBSCRIBE_SECRET`).

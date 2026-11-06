@@ -25,6 +25,16 @@ public class SettingsService {
 		return user;
 	}
 
+	// Turns one kind of email off. Repeating it changes nothing (mail providers may POST twice).
+	// False when the account no longer exists.
+	@Transactional
+	public boolean unsubscribe(Long userId, EmailList list) {
+		return users.findById(userId).map(user -> {
+			user.turnOff(list);
+			return true;
+		}).orElse(false);
+	}
+
 	// The id comes from the session, so a missing user means the account is gone.
 	private AppUser load(Long userId) {
 		return users.findById(userId).orElseThrow(() -> new IllegalStateException("No user " + userId));

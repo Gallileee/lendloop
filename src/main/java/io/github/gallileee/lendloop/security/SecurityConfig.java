@@ -18,6 +18,8 @@ public class SecurityConfig {
 		http
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/login", "/register", "/css/**", "/error").permitAll()
+				// Unsubscribe links are signed per user (UnsubscribeLinks) and work without a login.
+				.requestMatchers("/unsubscribe").permitAll()
 				.anyRequest().authenticated())
 			// After login, go back to the page that asked for it (e.g. an invite link), else to /items.
 			.formLogin(form -> form
@@ -25,6 +27,9 @@ public class SecurityConfig {
 				.usernameParameter("email")
 				.defaultSuccessUrl("/items")
 				.permitAll())
+			// RFC 8058: the mail provider POSTs to the unsubscribe link without cookies, so it can't
+			// send a CSRF token. The signature in the link already proves it came from our email.
+			.csrf(csrf -> csrf.ignoringRequestMatchers("/unsubscribe"))
 			.logout(logout -> logout.logoutSuccessUrl("/login?logout"))
 			// Invite tokens are in URLs; never send them to other sites in the Referer header.
 			.headers(headers -> headers.referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.SAME_ORIGIN)));
