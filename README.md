@@ -15,6 +15,10 @@ People keep asking online for an app that tracks what they own, what they want a
 - **Sign up and log in** with email and password.
   - Emails are trimmed and compared case-insensitively.
   - Passwords need at least 10 characters with no composition rules (NIST SP 800-63B). They're stored as BCrypt hashes, and anything BCrypt would silently truncate (over 72 bytes) is rejected.
+  - **Failed logins are limited** (`LoginThrottle`): after 5 failures for one email address, or 30 from one IP address, within 15 minutes, logins are paused. The pause ends when the oldest of those failures is 15 minutes old.
+    - While paused, even the right password is refused without being checked, so a lucky guess isn't revealed.
+    - Unknown emails count the same as real ones, so the answer doesn't tell which accounts exist.
+    - A successful login clears that email's count, but not the IP's.
 - **My things:** add, edit and delete items with a name, category, optional description and a "friends can ask to borrow it" switch.
 - **Add a book by its ISBN.** Type or scan the 10 or 13 digits on Add item and *Look it up*: the title, authors, publisher and date are filled in from [Open Library](https://openlibrary.org/developers/api) (free, no API key), and you check them before saving. ISBN-10 and ISBN-13 are both accepted with or without hyphens, the check digit is verified, and the ISBN is stored as ISBN-13. If Open Library is slow (3 s connect / 5 s read timeout), down, or doesn't know the book, you get a message and fill it in by hand.
 - **Ownership is enforced on the server.** Every item query is scoped to the logged-in user, and someone else's item answers 404, so its existence isn't revealed.
@@ -92,6 +96,7 @@ Open http://localhost:8080, create an account and add some things. Data is kept 
 | `UNSUBSCRIBE_SECRET` | not set | Signs the unsubscribe links in emails, at least 32 characters (`openssl rand -base64 32`). Not set: a random secret per run, so links in emails stop working after a restart. **Set it in any deployment**; changing it invalidates all links already sent |
 | `OPENLIBRARY_USER_AGENT` | `Lendloop/0.1 (+https://github.com/Gallileee/lendloop)` | Sent with ISBN lookups. Open Library asks regular API users to name their app and a contact, so add your email when you deploy |
 | `OPENLIBRARY_BASE_URL` | `https://openlibrary.org` | Where ISBN lookups go |
+| `LOGIN_MAX_FAILURES_PER_EMAIL` / `LOGIN_MAX_FAILURES_PER_IP` / `LOGIN_WINDOW` | `5` / `30` / `15m` | Failed-login limits. Behind a reverse proxy, also set `server.forward-headers-strategy=framework`, or every user shares the proxy's IP |
 | `REMINDERS_CRON` | `0 0 8 * * *` | When the reminder job runs (Spring cron, server time zone); `-` turns it off |
 
 To use PostgreSQL and a local mail catcher (needs Docker):
@@ -122,6 +127,8 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `OutsideLoanTests`: lending to someone outside the app over HTTP: the form on My things, name clean-up, how it shows on My things, Loans and the group page (members don't see the name), returning and lending again, input limits, one active loan per item, owner-only (404), the database's "exactly one borrower" checks, and earlier names suggested (per owner) and reused with their spelling.
 - `UnsubscribeLinksTest`: the signed links on their own: accepted for the right user and list only, another secret or a cut-off signature rejected, malformed parameters (parameterized), too short a secret refused at startup, and a random secret per run.
 - `UnsubscribeTests`: the link over HTTP, logged out: GET only asks, the button turns off just that list, the mail provider's one-click POST works without a CSRF token and can be repeated, forged links and deleted accounts get 404, and other POSTs still need a CSRF token.
+- `LoginThrottleTest`: the sliding window with a test clock (no Spring): when the pause starts and ends, case-insensitive emails, one IP and many accounts, success clears the email but not the IP, the longer of two waits, purging old entries, and very long emails.
+- `LoginRateLimitTests`: the limits over HTTP: the 5th wrong password pauses the email (even the right password, from any IP), unknown emails are paused the same way, a success forgets typos, one IP guessing at 30 accounts is paused, the login page explains the pause, and a missing CSRF token is still rejected first and not counted.
 - `SettingsTests`: the Settings page needs a login, shows both emails on for a new account, saves the name and unticked boxes, refreshes the name in the session, and refuses a blank name.
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `ItemFilterTest`: turning query parameters into a filter (trimming, cutting, unknown categories ignored) and escaping `%`, `_` and `\` for LIKE (no Spring).
@@ -163,7 +170,9 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - The invite expiry is shown in the server's time zone. Behind a reverse proxy, set `server.forward-headers-strategy=framework` so invite links use the public host and https.
 - Groups can't be renamed or deleted, and members can't be removed by the owner yet.
 - Sign-up says when an email is already registered, which reveals that the account exists. That's acceptable for an app between friends, but it should change before a public launch.
-- There's no password reset, email verification or rate limiting on login yet.
+- There's no password reset or email verification yet.
+- Failed-login counts are kept in memory: a restart forgets them, and two app instances would each count separately.
+- Someone who knows an email address can pause that person's logins for 15 minutes by failing on purpose. That's the usual trade-off of per-account limits. The pause is short, and failures while paused don't extend it.
 - The UI is in English only.
 - Group search is a substring match (`LIKE '%…%'`), not full-text search: no typo tolerance, no ranking, no accents ignored ("Bila" doesn't find "Bílá"), and it can't use an index. Fine for a group's few hundred things.
 - ISBN lookup needs Open Library to be online, and its data is only as good as the catalogue (some editions have no author or an odd publisher name). Book covers aren't shown.
@@ -172,7 +181,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done).
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done).
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).

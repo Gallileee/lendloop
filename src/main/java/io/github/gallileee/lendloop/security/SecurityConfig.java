@@ -6,6 +6,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 
 @Configuration
@@ -14,7 +18,7 @@ public class SecurityConfig {
 	// Everything needs a login except sign-up, login and the stylesheet.
 	// CSRF protection stays on; Thymeleaf adds the token to every POST form.
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+	SecurityFilterChain securityFilterChain(HttpSecurity http, LoginThrottle loginThrottle) throws Exception {
 		http
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/login", "/register", "/css/**", "/error").permitAll()
@@ -25,8 +29,11 @@ public class SecurityConfig {
 			.formLogin(form -> form
 				.loginPage("/login")
 				.usernameParameter("email")
-				.defaultSuccessUrl("/items")
+				.successHandler(countingSuccessHandler(loginThrottle))
+				.failureHandler(countingFailureHandler(loginThrottle))
 				.permitAll())
+			// Too many failed logins: refused before the password is checked (after the CSRF check).
+			.addFilterBefore(new LoginThrottleFilter(loginThrottle), UsernamePasswordAuthenticationFilter.class)
 			// RFC 8058: the mail provider POSTs to the unsubscribe link without cookies, so it can't
 			// send a CSRF token. The signature in the link already proves it came from our email.
 			.csrf(csrf -> csrf.ignoringRequestMatchers("/unsubscribe"))
@@ -34,6 +41,28 @@ public class SecurityConfig {
 			// Invite tokens are in URLs; never send them to other sites in the Referer header.
 			.headers(headers -> headers.referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.SAME_ORIGIN)));
 		return http.build();
+	}
+
+	// What defaultSuccessUrl("/items") did (back to the saved page, else /items), and the email's
+	// failed attempts are forgotten.
+	private static AuthenticationSuccessHandler countingSuccessHandler(LoginThrottle throttle) {
+		SavedRequestAwareAuthenticationSuccessHandler redirect = new SavedRequestAwareAuthenticationSuccessHandler();
+		redirect.setDefaultTargetUrl("/items");
+		return (request, response, authentication) -> {
+			throttle.recordSuccess(request.getParameter("email"));
+			redirect.onAuthenticationSuccess(request, response, authentication);
+		};
+	}
+
+	// Counts the failure. The attempt that reaches the limit already says "too many attempts", so
+	// the next one isn't a surprise.
+	private static AuthenticationFailureHandler countingFailureHandler(LoginThrottle throttle) {
+		return (request, response, exception) -> {
+			String email = request.getParameter("email");
+			throttle.recordFailure(email, request.getRemoteAddr());
+			boolean blocked = throttle.blockedFor(email, request.getRemoteAddr()).isPresent();
+			response.sendRedirect(request.getContextPath() + (blocked ? "/login?blocked" : "/login?error"));
+		};
 	}
 
 	// BCrypt, stored with a {bcrypt} prefix so the algorithm can be upgraded later without a migration.

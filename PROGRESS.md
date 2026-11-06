@@ -1,5 +1,34 @@
 # Progress log
 
+## 2026-11-06: Milestone 3h, failed-login limits
+
+Why: next step 1, picked by the owner. Without a limit, a script could try passwords on an account as fast as BCrypt allows. OWASP's authentication cheat sheet recommends throttling failed logins per account. Unlike a permanent lockout, a short pause can't be abused to lock someone out for good.
+
+Done:
+- `LoginThrottle` (security package): a sliding window of failed logins, in memory.
+  - Keys `email:<lower-cased>` (5 per 15 min) and `ip:<address>` (30 per 15 min), configurable (`LOGIN_*`).
+  - Only the last `max` failure times are kept per key. Blocked while the oldest of them is inside the window; `blockedFor` returns the remaining wait.
+  - Failures while blocked aren't counted, so a pause always ends. A success clears the email but not the IP, so logging into your own account between guesses doesn't reset it.
+  - Memory: at most 100,000 keys and emails cut to 320 characters, plus `@Scheduled` purging every 10 min.
+- `LoginThrottleFilter` before `UsernamePasswordAuthenticationFilter` (so after the CSRF check): a blocked `POST /login` goes to `/login?blocked` without the password being checked. It's not a `@Component`, because Spring Boot would also register it as a plain servlet filter.
+- `SecurityConfig`: counting success and failure handlers.
+  - The success handler still goes back to the saved page, else `/items`, like `defaultSuccessUrl` did.
+  - The attempt that reaches the limit already shows the pause message.
+- Login page: "Too many failed attempts… paused for up to 15 minutes".
+- `WebTest` clears the throttle after each test (MockMvc requests share one IP).
+- Tests: `LoginThrottleTest` (8, movable clock) and `LoginRateLimitTests` (6). 182 in total.
+
+**Bug found by the tests:** the filter first matched `request.getServletPath()`. That's empty in MockMvc, and in general it depends on how the servlet is mapped, so the filter never ran. It now compares the request URI without the context path.
+
+Verified locally:
+- `./mvnw test`: 182 run, 0 failures, 3 skipped (PostgreSQL, no Docker; CI runs them).
+- In the browser (`lendloop-memory-demo`): through the real form, 4 wrong passwords gave "Wrong email or password" and the 5th gave the pause message. Then the right password was also refused with the pause message, and the log shows "Refused a login from 127.0.0.1 … (allowed again in 893 s)". No server errors.
+
+Trade-offs:
+- In memory instead of the database or Redis: no migration and no new dependency (Bucket4j would add one). It's forgotten on restart and assumes one instance, like the reminder job.
+- Per-account limits let someone pause another person's logins for 15 minutes. That's accepted: the pause is short, and a CAPTCHA would be heavier than this app needs.
+- Behind a proxy the IP rule needs `server.forward-headers-strategy`, or all users share one IP and its limit of 30.
+
 ## 2026-11-06: Milestone 3g, one-click unsubscribe (RFC 8058)
 
 Why: next step 1, picked by the owner. Gmail and Yahoo have required one-click unsubscribe from bulk senders since 2024, and before this, turning emails off needed a login.
@@ -327,7 +356,7 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Login rate limiting, password reset by email.
+1. Password reset by email (a signed, single-use, short-lived token; reuse the mail setup and the throttle idea for reset requests).
 2. Group management: rename, delete, owner removes a member, hand over ownership.
 3. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
 4. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
