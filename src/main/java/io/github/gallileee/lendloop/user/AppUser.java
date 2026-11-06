@@ -53,6 +53,21 @@ public class AppUser {
 		this.notifyLentOverdue = notifyLentOverdue;
 	}
 
+	// From an unsubscribe link: turns one kind of email off and leaves the other as it is.
+	public void turnOff(EmailList list) {
+		switch (list) {
+			case BORROWED -> remindBorrowed = false;
+			case LENT -> notifyLentOverdue = false;
+		}
+	}
+
+	public boolean wants(EmailList list) {
+		return switch (list) {
+			case BORROWED -> remindBorrowed;
+			case LENT -> notifyLentOverdue;
+		};
+	}
+
 	public Long getId() {
 		return id;
 	}

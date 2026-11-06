@@ -46,6 +46,11 @@ People keep asking online for an app that tracks what they own, what they want a
   - Each email is recorded on the loan as it's sent, so a second run or a restart the same day sends nothing twice. A failed email is retried on the next run and doesn't stop the others.
   - Without a mail server configured, the emails are written to the log instead, so the app still runs with zero setup. `docker compose up -d` starts [Mailpit](https://mailpit.axllent.org/), which catches them at http://localhost:8025.
 - **Settings** (click your name in the top bar): change your name, and turn each kind of email on or off (reminders about things you borrowed; notices about things you lent out, including the reminders for people outside the app). Both are on by default, and every email links to this page.
+- **One-click unsubscribe from any email** (RFC 8058), no login needed:
+  - Every email has a `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` header, so Gmail, Outlook and other mail apps show their own *Unsubscribe* button. The same link is in the footer: "Stop them: …".
+  - The link turns off only the kind of email it came with (borrowed vs lent out), for only that person. It carries the user id and the list, signed with HMAC-SHA256 (`UNSUBSCRIBE_SECRET`), so a link can't be changed to someone else's account.
+  - Opening the link only asks "Stop these emails?" and the button POSTs, because mail systems open links in emails to scan them. The mail provider's own POST needs no cookies or CSRF token (the signature proves the link is ours). Repeating it is harmless.
+  - A forged, damaged or outdated link gets the same "This link doesn't work" page (404).
   - A new name shows in the top bar at once: the logged-in principal in the session is replaced on save.
 - **The loan rules are a small state machine:** `REQUESTED -> ACTIVE -> RETURNED`, or `REQUESTED -> DECLINED / CANCELLED`. A loan to someone outside the app starts at `ACTIVE`.
   - The `Loan` entity refuses every other change.
@@ -84,6 +89,7 @@ Open http://localhost:8080, create an account and add some things. Data is kept 
 | `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | not set | SMTP server for reminder emails (Mailpit: `localhost` / `1025`). Not set: emails go to the log |
 | `BASE_URL` | `http://localhost:${PORT}` | Public address of the app, for links in emails |
 | `MAIL_FROM` | `Lendloop <no-reply@lendloop.local>` | Sender of the emails |
+| `UNSUBSCRIBE_SECRET` | not set | Signs the unsubscribe links in emails, at least 32 characters (`openssl rand -base64 32`). Not set: a random secret per run, so links in emails stop working after a restart. **Set it in any deployment**; changing it invalidates all links already sent |
 | `OPENLIBRARY_USER_AGENT` | `Lendloop/0.1 (+https://github.com/Gallileee/lendloop)` | Sent with ISBN lookups. Open Library asks regular API users to name their app and a contact, so add your email when you deploy |
 | `OPENLIBRARY_BASE_URL` | `https://openlibrary.org` | Where ISBN lookups go |
 | `REMINDERS_CRON` | `0 0 8 * * *` | When the reminder job runs (Spring cron, server time zone); `-` turns it off |
@@ -114,6 +120,8 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `LoanFlowTests`: the whole loan flow over HTTP, who may do what, due-date limits, one person at a time, overdue display, and no deleting lent-out items. (See PROGRESS.md for the bug that led to `WebTest`.)
 - `LoanReminderTests`: the reminder job against the database with a mocked `JavaMailSender`: the "due tomorrow" email and its text, no second email on the same day, overdue on the first day and then weekly, the owner's one-off overdue notice, the owner getting the due-tomorrow and weekly overdue reminders for loans to someone outside the app (and a failed one retried), users who turned emails off, nothing for returned loans or requests, a failed email retried without blocking the others, and no header injection through item names.
 - `OutsideLoanTests`: lending to someone outside the app over HTTP: the form on My things, name clean-up, how it shows on My things, Loans and the group page (members don't see the name), returning and lending again, input limits, one active loan per item, owner-only (404), the database's "exactly one borrower" checks, and earlier names suggested (per owner) and reused with their spelling.
+- `UnsubscribeLinksTest`: the signed links on their own: accepted for the right user and list only, another secret or a cut-off signature rejected, malformed parameters (parameterized), too short a secret refused at startup, and a random secret per run.
+- `UnsubscribeTests`: the link over HTTP, logged out: GET only asks, the button turns off just that list, the mail provider's one-click POST works without a CSRF token and can be repeated, forged links and deleted accounts get 404, and other POSTs still need a CSRF token.
 - `SettingsTests`: the Settings page needs a login, shows both emails on for a new account, saves the name and unticked boxes, refreshes the name in the session, and refuses a blank name.
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `ItemFilterTest`: turning query parameters into a filter (trimming, cutting, unknown categories ignored) and escaping `%`, `_` and `\` for LIKE (no Spring).
@@ -126,7 +134,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 
 ```
 src/main/java/io/github/gallileee/lendloop/
-  user/       account entity, sign-up and settings forms, validation and services
+  user/       account entity, sign-up and settings forms, validation and services, signed unsubscribe links
   security/   Spring Security config and the logged-in user (AppUserDetails)
   item/       items: entity, repository, service (ownership checks), controller
   book/       ISBN parsing and validation, Open Library lookup (BookLookup, OpenLibraryClient)
@@ -145,7 +153,8 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 - Only due dates are emailed. New requests and answers are only visible in the app.
 - If the owner's overdue email fails, it isn't retried (retrying would remind the borrower twice).
-- Emails have no one-click unsubscribe header (RFC 8058); turning them off needs a login.
+- One-click unsubscribe also needs the mail to be DKIM-signed by the sending domain before Gmail and Yahoo show their button. That's set up on the mail server, not in the app.
+- Unsubscribe links don't expire. The only thing one can do is turn an email off, which the user can undo in Settings.
 - The reminder job assumes one running instance of the app; two instances would both send.
 - "Today" and due dates use the server's time zone.
 - Only the owner can mark a loan as returned. If they forget, it stays lent out.
@@ -163,7 +172,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done).
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done).
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).
