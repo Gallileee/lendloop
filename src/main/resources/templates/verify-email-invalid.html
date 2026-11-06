@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments :: head('Link expired')}"></head>
+<body>
+  <header th:replace="~{fragments :: topbar}"></header>
+  <main class="narrow">
+    <h1>This link doesn't work any more</h1>
+    <p class="lead">
+      Confirmation links work once, for 48 hours, and a newer link turns off the older ones. If you
+      already confirmed your email, there's nothing more to do.
+    </p>
+    <p sec:authorize="isAuthenticated()"><a class="button" th:href="@{/settings#email}">Get a new link in Settings</a></p>
+    <p sec:authorize="!isAuthenticated()"><a class="button" th:href="@{/login}">Log in to get a new link</a></p>
+  </main>
+</body>
+</html>

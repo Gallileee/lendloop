@@ -65,9 +65,15 @@ class LoanReminderTests extends WebTest {
 	@BeforeEach
 	void setUp() {
 		stubMimeMessages();
-		alex = users.save(new AppUser("alex@example.com", "Alex", "{noop}x"));
-		sam = users.save(new AppUser("sam@example.com", "Sam", "{noop}x"));
+		alex = users.save(confirmed(new AppUser("alex@example.com", "Alex", "{noop}x")));
+		sam = users.save(confirmed(new AppUser("sam@example.com", "Sam", "{noop}x")));
 		catan = lend(items.save(new Item(alex, "Catan", null, Category.GAME, true)), sam, DUE);
+	}
+
+	// Only confirmed addresses get emails.
+	private static AppUser confirmed(AppUser user) {
+		user.markEmailVerified(NOW);
+		return user;
 	}
 
 	private Loan lend(Item item, AppUser borrower, LocalDate due) {
@@ -244,6 +250,25 @@ class LoanReminderTests extends WebTest {
 	@Test
 	void anOwnerWhoTurnedNoticesOffIsNotTold() {
 		changeSettings(alex, true, false);
+
+		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
+		assertThat(onlyMail().getTo()).containsExactly("sam@example.com");
+	}
+
+	@Test
+	void aBorrowerWhoHasNotConfirmedTheirEmailGetsNoRemindersButTheOwnerIsStillTold() {
+		jdbc.update("update app_user set email_verified_at = null where id = ?", sam.getId());
+
+		assertThat(job.sendReminders(DUE.minusDays(1))).isZero();
+		verify(mailSender, never()).send(any(MimeMessage.class));
+
+		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
+		assertThat(onlyMail().getTo()).containsExactly("alex@example.com");
+	}
+
+	@Test
+	void anOwnerWhoHasNotConfirmedTheirEmailIsNotTold() {
+		jdbc.update("update app_user set email_verified_at = null where id = ?", alex.getId());
 
 		assertThat(job.sendReminders(DUE.plusDays(1))).isOne();
 		assertThat(onlyMail().getTo()).containsExactly("sam@example.com");

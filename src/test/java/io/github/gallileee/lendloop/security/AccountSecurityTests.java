@@ -170,7 +170,7 @@ class AccountSecurityTests extends WebTest {
 		MockHttpSession phone = logIn(PASSWORD);
 		String token = "t".repeat(43);
 		jdbc.update("insert into password_reset_token (user_id, token_hash, expires_at, created_at) values (?, ?, ?, ?)",
-				kim.getId(), PasswordResetService.hash(token), Timestamp.from(Instant.now().plusSeconds(600)),
+				kim.getId(), OneTimeTokens.hash(token), Timestamp.from(Instant.now().plusSeconds(600)),
 				Timestamp.from(Instant.now()));
 
 		assertThat(passwordResets.resetPassword(token, NEW_PASSWORD)).contains("kim@example.com");

@@ -7,7 +7,10 @@
     <h1>Log in</h1>
     <p class="lead">Keep track of what you lend to friends, and what they can lend you.</p>
 
-    <p th:if="${registered}" class="notice" role="status">Account created. Log in to continue.</p>
+    <p th:if="${registered}" class="notice" role="status">
+      Account created. Log in to continue. We've also emailed you a link to confirm your address.
+    </p>
+    <p th:if="${emailVerified}" class="notice" role="status">Email confirmed. Thanks!</p>
     <p th:if="${passwordReset}" class="notice" role="status">Password changed. Log in with your new password.</p>
     <p th:if="${param.logout}" class="notice" role="status">You're logged out.</p>
     <p th:if="${param.ended}" class="notice" role="status">

@@ -4,15 +4,9 @@ import io.github.gallileee.lendloop.mail.Mailer;
 import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.AppUserRepository;
 import io.github.gallileee.lendloop.user.RegistrationService;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.HexFormat;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +19,11 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 // "Forgot my password": emails a one-time link, then sets the new password.
 //
-// - The link holds 256 random bits; only their SHA-256 hash is stored. (A fast hash is enough here:
-//   unlike a password, the token is random and long, so it can't be guessed from its hash.)
+// - The link holds a OneTimeTokens token; only its SHA-256 hash is stored.
 // - It works once, for 30 minutes, and asking again replaces the earlier link.
 // - Asking for a link always gets the same answer, whether or not the account exists.
 // - At most 3 requests per email and 10 per IP an hour, so nobody can flood an inbox.
+// - Using the link also confirms the email address: only its owner could read it.
 @Service
 public class PasswordResetService {
 
@@ -45,7 +39,6 @@ public class PasswordResetService {
 	private final Clock clock;
 	private final AttemptLimiter requestLimits;
 	private final String baseUrl;
-	private final SecureRandom random = new SecureRandom();
 
 	public PasswordResetService(PasswordResetTokenRepository tokens, AppUserRepository users,
 			PasswordEncoder passwordEncoder, Mailer mailer, LoginThrottle loginThrottle, Clock clock,
@@ -77,8 +70,8 @@ public class PasswordResetService {
 		}
 		// Only the newest link works.
 		tokens.deleteAllForUser(user.get().getId());
-		String token = newToken();
-		tokens.save(new PasswordResetToken(user.get(), hash(token), now.plus(LINK_VALIDITY), now));
+		String token = OneTimeTokens.newToken();
+		tokens.save(new PasswordResetToken(user.get(), OneTimeTokens.hash(token), now.plus(LINK_VALIDITY), now));
 		mailer.send(user.get().getEmail(), "Reset your Lendloop password", text(user.get(), token), null);
 	}
 
@@ -95,6 +88,7 @@ public class PasswordResetService {
 		return find(token).map(resetToken -> {
 			AppUser user = resetToken.getUser();
 			user.changePasswordHash(passwordEncoder.encode(newPassword));
+			user.markEmailVerified(clock.instant());
 			tokens.deleteAllForUser(user.getId());
 			// Whoever proves they own the inbox can log in straight away.
 			loginThrottle.recordSuccess(user.getEmail());
@@ -114,27 +108,10 @@ public class PasswordResetService {
 	}
 
 	private Optional<PasswordResetToken> find(String token) {
-		// What newToken() makes: 32 bytes in unpadded base64url. Anything else can't match.
-		if (token == null || !token.matches("[A-Za-z0-9_-]{43}")) {
+		if (!OneTimeTokens.isWellFormed(token)) {
 			return Optional.empty();
 		}
-		return tokens.findByTokenHash(hash(token)).filter(t -> t.isValidAt(clock.instant()));
-	}
-
-	private String newToken() {
-		byte[] bytes = new byte[32];
-		random.nextBytes(bytes);
-		return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-	}
-
-	static String hash(String token) {
-		try {
-			byte[] digest = MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.US_ASCII));
-			return HexFormat.of().formatHex(digest);
-		}
-		catch (NoSuchAlgorithmException e) {
-			throw new IllegalStateException("SHA-256 is not available", e);
-		}
+		return tokens.findByTokenHash(OneTimeTokens.hash(token)).filter(t -> t.isValidAt(clock.instant()));
 	}
 
 	private String text(AppUser user, String token) {

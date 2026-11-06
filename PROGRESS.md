@@ -1,5 +1,32 @@
 # Progress log
 
+## 2026-11-06: Milestone 3k, email confirmation at sign-up
+
+Why: next step 1. Anyone could sign up with someone else's address, and that person would then get our loan reminders. Confirming the address first is also expected before a deployment.
+
+Done:
+- Flyway `V10__email_verification.sql`: `app_user.email_verified_at` (null = not confirmed), existing accounts set to their `created_at`, and `email_verification_token` (same shape as `password_reset_token`).
+- **`OneTimeTokens`** (security package): the token code taken out of `PasswordResetService` (256 random bits as base64url, format check, SHA-256 hash), now shared by both kinds of link.
+- `EmailVerificationService`:
+  - `sendLink` right after sign-up; `resend` from Settings (3 per account, 10 per IP an hour, through an `AttemptLimiter`); `verify` marks the address confirmed and deletes the user's tokens.
+  - Links work for 48 hours, and a newer link deletes the older one.
+- `EmailVerificationController`: `GET /verify-email` shows a *Confirm my email* button and `POST /verify-email` confirms (open without login). Mail scanners open links in emails by themselves, so a confirming GET could confirm an address nobody read. Unknown, used or expired links get a 404 page.
+- **Soft gate**, not a login block: `AppUser.mayBeEmailed(list)` = confirmed and switched on, used by `LoanReminderJob` for borrowers and owners. Logging in still works, because Lendloop's emails are optional and nobody should be locked out by a missing email.
+- `RegistrationController` sends the link; a failing mail server is logged and the account is still created (the token rolls back, Settings can send a new one).
+- A password reset also confirms the address (`PasswordResetService.resetPassword`).
+- UI: a banner under the top bar on every page until confirmed (`NavigationAdvice.emailUnconfirmed`, read from the database so a link opened in another browser counts at once; the `topbar` fragment is now a `th:block`, so no page template changed), an *Email address* section on Settings with *Send the link again*, and notices on login and Settings.
+- Tests: `EmailVerificationTests` (12), `LoanReminderTests` +2, `PasswordResetTests` +1, `PostgresMigrationTest` +1 (CI only). 223 in total locally.
+
+Verified locally:
+- `./mvnw test`: 223 run, 0 failures, 5 skipped (PostgreSQL, no Docker; CI runs them, including V10).
+- Mutation check: with `mayBeEmailed` ignoring the confirmation, both new `LoanReminderTests` fail. Restored afterwards.
+
+Not verified: the pages in a browser. Starting `lendloop-memory-demo` was declined in this automated run. To check by hand: start it, sign up, read the link with `preview_logs` (search `verify-email?token=`), check the banner, *Send the link again* on Settings, then confirm and check the banner is gone (also at 375 px).
+
+Trade-offs:
+- One more primary-key query per page view (the banner). It could ride along in the session principal, but then a link opened in another browser wouldn't clear the banner until the next login.
+- Unconfirmed accounts are kept forever; a cleanup job could delete them after some weeks.
+
 ## 2026-11-06: Milestone 3j, change password and log out other sessions
 
 Why: next step 1, picked by the owner. After a reset (or a leaked password), sessions opened by whoever knew the old password stayed logged in. There was also no way to change a known password.
@@ -424,8 +451,8 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Email verification at sign-up (reuse the token pattern from password reset).
-2. Group management: rename, delete, owner removes a member, hand over ownership.
-3. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
-4. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
-5. Deployment on a free tier (set `UNSUBSCRIBE_SECRET`).
+1. Group management: rename, delete, owner removes a member, hand over ownership.
+2. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
+3. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
+4. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
+5. Delete accounts that stay unconfirmed for a few weeks; let users change their email (confirming the new one first).
