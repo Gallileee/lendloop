@@ -19,6 +19,11 @@ People keep asking online for an app that tracks what they own, what they want a
     - While paused, even the right password is refused without being checked, so a lucky guess isn't revealed.
     - Unknown emails count the same as real ones, so the answer doesn't tell which accounts exist.
     - A successful login clears that email's count, but not the IP's.
+  - **Forgot your password?** (link on the login page) emails a link to choose a new one:
+    - The link holds 256 random bits and works **once, for 30 minutes**. Asking again turns off the older link.
+    - Only a SHA-256 hash of it is stored, so someone who can read the database still can't use a link.
+    - The answer is the same whether or not the account exists, even if sending fails. At most 3 requests per email and 10 per IP an hour.
+    - The new password follows the sign-up rules. Resetting also ends a login pause, so you can log in straight away.
 - **My things:** add, edit and delete items with a name, category, optional description and a "friends can ask to borrow it" switch.
 - **Add a book by its ISBN.** Type or scan the 10 or 13 digits on Add item and *Look it up*: the title, authors, publisher and date are filled in from [Open Library](https://openlibrary.org/developers/api) (free, no API key), and you check them before saving. ISBN-10 and ISBN-13 are both accepted with or without hyphens, the check digit is verified, and the ISBN is stored as ISBN-13. If Open Library is slow (3 s connect / 5 s read timeout), down, or doesn't know the book, you get a message and fill it in by hand.
 - **Ownership is enforced on the server.** Every item query is scoped to the logged-in user, and someone else's item answers 404, so its existence isn't revealed.
@@ -127,6 +132,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `OutsideLoanTests`: lending to someone outside the app over HTTP: the form on My things, name clean-up, how it shows on My things, Loans and the group page (members don't see the name), returning and lending again, input limits, one active loan per item, owner-only (404), the database's "exactly one borrower" checks, and earlier names suggested (per owner) and reused with their spelling.
 - `UnsubscribeLinksTest`: the signed links on their own: accepted for the right user and list only, another secret or a cut-off signature rejected, malformed parameters (parameterized), too short a secret refused at startup, and a random secret per run.
 - `UnsubscribeTests`: the link over HTTP, logged out: GET only asks, the button turns off just that list, the mail provider's one-click POST works without a CSRF token and can be repeated, forged links and deleted accounts get 404, and other POSTs still need a CSRF token.
+- `PasswordResetTests`: the whole reset over HTTP with a mocked `Mailer`: the emailed link sets a new password (the old one stops working), a link works once, an unknown email gets the same answer and no email, a newer link replaces the older one, expired links, only the hash stored, password rules with the link still usable afterwards, malformed tokens, 3 requests an hour, a failed email looking the same (and rolled back), a reset ending a login pause, and CSRF.
 - `LoginThrottleTest`: the sliding window with a test clock (no Spring): when the pause starts and ends, case-insensitive emails, one IP and many accounts, success clears the email but not the IP, the longer of two waits, purging old entries, and very long emails.
 - `LoginRateLimitTests`: the limits over HTTP: the 5th wrong password pauses the email (even the right password, from any IP), unknown emails are paused the same way, a success forgets typos, one IP guessing at 30 accounts is paused, the login page explains the pause, and a missing CSRF token is still rejected first and not counted.
 - `SettingsTests`: the Settings page needs a login, shows both emails on for a new account, saves the name and unticked boxes, refreshes the name in the session, and refuses a blank name.
@@ -135,14 +141,15 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `GroupSearchTests`: the group search against the database: name and description ignoring case, wildcards taken literally, ISBN in any format, category, "free right now" with a lent-out item, the "2 of 4" count, the form keeping its values, "nothing matches" vs an empty group, bad parameters ignored, and outsiders still getting 404.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
-- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered search), loan and reminder queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
+- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered search), loan, reminder and password-reset queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
 
 ## Project structure
 
 ```
 src/main/java/io/github/gallileee/lendloop/
   user/       account entity, sign-up and settings forms, validation and services, signed unsubscribe links
-  security/   Spring Security config and the logged-in user (AppUserDetails)
+  security/   Spring Security config, the logged-in user, failed-login limits, password reset
+  mail/       Mailer: plain-text emails, logged when no mail server is set
   item/       items: entity, repository, service (ownership checks), controller
   book/       ISBN parsing and validation, Open Library lookup (BookLookup, OpenLibraryClient)
   group/      groups, membership, invite tokens, join flow
@@ -170,7 +177,10 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - The invite expiry is shown in the server's time zone. Behind a reverse proxy, set `server.forward-headers-strategy=framework` so invite links use the public host and https.
 - Groups can't be renamed or deleted, and members can't be removed by the owner yet.
 - Sign-up says when an email is already registered, which reveals that the account exists. That's acceptable for an app between friends, but it should change before a public launch.
-- There's no password reset or email verification yet.
+- There's no email verification yet: anyone can sign up with someone else's address (they just can't reset its password without the inbox).
+- A password reset doesn't log out sessions that are already open elsewhere.
+- Without a mail server, the reset email (with its link) only goes to the log. That's meant for local runs; configure mail before others use the app.
+- "Is there an account?" is hidden from the reset page's text, but not from its timing: sending an email takes longer than not sending one.
 - Failed-login counts are kept in memory: a restart forgets them, and two app instances would each count separately.
 - Someone who knows an email address can pause that person's logins for 15 minutes by failing on purpose. That's the usual trade-off of per-account limits. The pause is short, and failures while paused don't extend it.
 - The UI is in English only.
@@ -181,7 +191,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done).
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done).
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).

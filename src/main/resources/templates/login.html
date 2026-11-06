@@ -8,11 +8,13 @@
     <p class="lead">Keep track of what you lend to friends, and what they can lend you.</p>
 
     <p th:if="${registered}" class="notice" role="status">Account created. Log in to continue.</p>
+    <p th:if="${passwordReset}" class="notice" role="status">Password changed. Log in with your new password.</p>
     <p th:if="${param.logout}" class="notice" role="status">You're logged out.</p>
     <p th:if="${param.error}" class="alert" role="alert">Wrong email or password.</p>
     <p th:if="${param.blocked}" class="alert" role="alert">
       Too many failed attempts. To protect the account, logging in is paused for up to
-      <span th:text="${lockoutMinutes}">15</span> minutes. Please wait and try again.
+      <span th:text="${lockoutMinutes}">15</span> minutes. Please wait and try again, or
+      <a th:href="@{/forgot-password}">reset your password</a>.
     </p>
 
     <form th:action="@{/login}" method="post" class="card form">
@@ -24,6 +26,7 @@
       </label>
       <button type="submit" class="button">Log in</button>
     </form>
+    <p><a th:href="@{/forgot-password}">Forgot your password?</a></p>
     <p>New here? <a th:href="@{/register}">Create an account</a></p>
   </main>
 </body>

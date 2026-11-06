@@ -53,6 +53,11 @@ public class AppUser {
 		this.notifyLentOverdue = notifyLentOverdue;
 	}
 
+	// After a password reset; the caller has already hashed it.
+	public void changePasswordHash(String passwordHash) {
+		this.passwordHash = passwordHash;
+	}
+
 	// From an unsubscribe link: turns one kind of email off and leaves the other as it is.
 	public void turnOff(EmailList list) {
 		switch (list) {

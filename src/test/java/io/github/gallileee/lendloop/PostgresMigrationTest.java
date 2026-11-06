@@ -17,6 +17,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import org.springframework.dao.DataIntegrityViolationException;
 import io.github.gallileee.lendloop.item.ItemForm;
+import io.github.gallileee.lendloop.security.PasswordResetService;
+import org.springframework.jdbc.core.JdbcTemplate;
 import io.github.gallileee.lendloop.item.ItemService;
 import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.AppUserRepository;
@@ -48,6 +50,27 @@ class PostgresMigrationTest {
 
 	@Autowired
 	LoanRepository loans;
+
+	@Autowired
+	PasswordResetService passwordResets;
+
+	@Autowired
+	JdbcTemplate jdbc;
+
+	// Password reset tokens: the delete queries and the insert, on PostgreSQL. (Without a mail
+	// server the email only goes to the log.)
+	@Test
+	void passwordResetTokensWorkOnPostgres() {
+		users.save(new AppUser("pg-reset@example.com", "Reset", "{noop}irrelevant"));
+
+		passwordResets.requestReset("pg-reset@example.com", "192.0.2.1");
+		passwordResets.requestReset("PG-Reset@example.com", "192.0.2.1");
+
+		assertThat(jdbc.queryForObject("""
+				select count(*) from password_reset_token t join app_user u on u.id = t.user_id
+				where u.email = 'pg-reset@example.com'""", Integer.class)).as("only the newest link").isOne();
+		assertThat(passwordResets.isUsable("x".repeat(43))).isFalse();
+	}
 
 	// The loan queries (nulls last, limit, reminders) and the uniqueness constraints on PostgreSQL.
 	@Test
