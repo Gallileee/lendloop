@@ -2,6 +2,7 @@ package io.github.gallileee.lendloop;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.gallileee.lendloop.security.LoginThrottle;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,15 @@ public abstract class WebTest {
 
 	@Autowired
 	protected JdbcTemplate jdbc;
+
+	@Autowired
+	LoginThrottle loginThrottle;
+
+	// MockMvc requests all come from one IP; failed logins must not carry over to the next test.
+	@AfterEach
+	void forgetFailedLogins() {
+		loginThrottle.clear();
+	}
 
 	@AfterEach
 	void emptyTables() {
