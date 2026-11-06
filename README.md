@@ -24,6 +24,11 @@ People keep asking online for an app that tracks what they own, what they want a
     - Only a SHA-256 hash of it is stored, so someone who can read the database still can't use a link.
     - The answer is the same whether or not the account exists, even if sending fails. At most 3 requests per email and 10 per IP an hour.
     - The new password follows the sign-up rules. Resetting also ends a login pause, so you can log in straight away.
+  - **Change password** on Settings (asks for the current one; wrong guesses count like failed logins) and **Log out everywhere else**.
+  - A password change, a reset, or *Log out everywhere else* **ends every other session**:
+    - Each account has a `session_version`, raised by those actions, and each session remembers the number it logged in with.
+    - `SessionVersionFilter` compares the two on every logged-in request (one column by primary key) and logs out a stale session with "You were logged out because…". This works without a session registry and with several app instances.
+    - The browser that made the change stays logged in, and gets a new session id after a password change.
 - **My things:** add, edit and delete items with a name, category, optional description and a "friends can ask to borrow it" switch.
 - **Add a book by its ISBN.** Type or scan the 10 or 13 digits on Add item and *Look it up*: the title, authors, publisher and date are filled in from [Open Library](https://openlibrary.org/developers/api) (free, no API key), and you check them before saving. ISBN-10 and ISBN-13 are both accepted with or without hyphens, the check digit is verified, and the ISBN is stored as ISBN-13. If Open Library is slow (3 s connect / 5 s read timeout), down, or doesn't know the book, you get a message and fill it in by hand.
 - **Ownership is enforced on the server.** Every item query is scoped to the logged-in user, and someone else's item answers 404, so its existence isn't revealed.
@@ -133,6 +138,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `UnsubscribeLinksTest`: the signed links on their own: accepted for the right user and list only, another secret or a cut-off signature rejected, malformed parameters (parameterized), too short a secret refused at startup, and a random secret per run.
 - `UnsubscribeTests`: the link over HTTP, logged out: GET only asks, the button turns off just that list, the mail provider's one-click POST works without a CSRF token and can be repeated, forged links and deleted accounts get 404, and other POSTs still need a CSRF token.
 - `PasswordResetTests`: the whole reset over HTTP with a mocked `Mailer`: the emailed link sets a new password (the old one stops working), a link works once, an unknown email gets the same answer and no email, a newer link replaces the older one, expired links, only the hash stored, password rules with the link still usable afterwards, malformed tokens, 3 requests an hour, a failed email looking the same (and rolled back), a reset ending a login pause, and CSRF.
+- `AccountSecurityTests`: with real login sessions as "devices": a password change logs out the others but keeps this one (with a new session id), wrong current passwords change nothing and count like failed logins, the password rules, log out everywhere else, a reset logging out every device, a deleted account's session ending, a name change keeping the session, and login + CSRF on both forms.
 - `LoginThrottleTest`: the sliding window with a test clock (no Spring): when the pause starts and ends, case-insensitive emails, one IP and many accounts, success clears the email but not the IP, the longer of two waits, purging old entries, and very long emails.
 - `LoginRateLimitTests`: the limits over HTTP: the 5th wrong password pauses the email (even the right password, from any IP), unknown emails are paused the same way, a success forgets typos, one IP guessing at 30 accounts is paused, the login page explains the pause, and a missing CSRF token is still rejected first and not counted.
 - `SettingsTests`: the Settings page needs a login, shows both emails on for a new account, saves the name and unticked boxes, refreshes the name in the session, and refuses a blank name.
@@ -178,7 +184,6 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - Groups can't be renamed or deleted, and members can't be removed by the owner yet.
 - Sign-up says when an email is already registered, which reveals that the account exists. That's acceptable for an app between friends, but it should change before a public launch.
 - There's no email verification yet: anyone can sign up with someone else's address (they just can't reset its password without the inbox).
-- A password reset doesn't log out sessions that are already open elsewhere.
 - Without a mail server, the reset email (with its link) only goes to the log. That's meant for local runs; configure mail before others use the app.
 - "Is there an account?" is hidden from the reset page's text, but not from its timing: sending an email takes longer than not sending one.
 - Failed-login counts are kept in memory: a restart forgets them, and two app instances would each count separately.
@@ -191,7 +196,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done).
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done).
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).

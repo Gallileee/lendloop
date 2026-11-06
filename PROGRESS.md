@@ -1,5 +1,38 @@
 # Progress log
 
+## 2026-11-06: Milestone 3j, change password and log out other sessions
+
+Why: next step 1, picked by the owner. After a reset (or a leaked password), sessions opened by whoever knew the old password stayed logged in. There was also no way to change a known password.
+
+Done:
+- Flyway `V9__session_version.sql`: `app_user.session_version int default 0`.
+- `AppUser.changePasswordHash` now also calls `endAllSessions()` (raises the version), so the password reset from 3i ends sessions too.
+- `AppUserDetails` carries `sessionVersion`.
+- `SessionVersionFilter`, registered before `AuthorizationFilter`:
+  - On each logged-in request it compares the version with `AppUserRepository.findSessionVersion(id)` (one column by primary key).
+  - On a mismatch, or if the account is gone, it logs out (session invalidated) and redirects to `/login?ended`.
+  - Chosen over Spring's `SessionRegistry`, which is in-memory and per instance and needs the concurrency-control setup. The price is one query per request.
+- `AccountSecurityService` + `AccountSecurityController` (security package):
+  - `POST /settings/password`: the current password is required. Wrong guesses go through `LoginThrottle` (same limits and pause as logins). Then the new password is set, the version raised, and the current session refreshed under a **new session id** (`changeSessionId`).
+  - `POST /settings/sessions`: raises the version and refreshes the current session, so only this browser stays logged in.
+- `CurrentSession` component: refreshes the principal in the session. `SettingsController` (name change) uses it instead of its own copy.
+- Settings page: *Change password* and *Other devices* sections. Typed passwords are never echoed back. The login page explains `?ended`.
+- Tests: `AccountSecurityTests` (10), using real login sessions as devices. 207 in total.
+
+Verified locally:
+- `./mvnw test`: 207 run, 0 failures, 4 skipped (PostgreSQL, no Docker; CI runs them, including V9).
+- Mutation checks, each restored afterwards:
+  - Without the filter registration, 4 of 10 `AccountSecurityTests` fail.
+  - Without refreshing the current session after a password change, `changingThePasswordLogsOutOtherDevicesButNotThisOne` fails.
+- In the browser (`lendloop-memory-demo`):
+  - Signed up and logged in through the real forms. A second "device" (curl with its own cookies) logged in too.
+  - Changing the password in Settings showed "Password changed…" and the browser stayed logged in. The curl session's next request went to `/login?ended`, then to `/login`.
+  - Settings at 375 px: no horizontal overflow, and both new sections look right. No server errors.
+
+Trade-offs:
+- One extra query per logged-in request; fine at this size, and it could be cached for a few seconds if needed.
+- "Log out everywhere else" can't list devices (no session registry); it ends all of them.
+
 ## 2026-11-06: Milestone 3i, password reset by email
 
 Why: next step 1, picked by the owner. A forgotten password meant a lost account, which blocks any deployment.
@@ -391,7 +424,7 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Log out other sessions after a password reset, and a "change password" form on Settings.
+1. Email verification at sign-up (reuse the token pattern from password reset).
 2. Group management: rename, delete, owner removes a member, hand over ownership.
 3. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
 4. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).

@@ -10,6 +10,9 @@
     <p th:if="${registered}" class="notice" role="status">Account created. Log in to continue.</p>
     <p th:if="${passwordReset}" class="notice" role="status">Password changed. Log in with your new password.</p>
     <p th:if="${param.logout}" class="notice" role="status">You're logged out.</p>
+    <p th:if="${param.ended}" class="notice" role="status">
+      You were logged out because the password was changed or you logged out everywhere. Log in again.
+    </p>
     <p th:if="${param.error}" class="alert" role="alert">Wrong email or password.</p>
     <p th:if="${param.blocked}" class="alert" role="alert">
       Too many failed attempts. To protect the account, logging in is paused for up to

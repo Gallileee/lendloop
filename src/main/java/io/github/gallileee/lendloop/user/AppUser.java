@@ -36,6 +36,10 @@ public class AppUser {
 	@Column(name = "notify_lent_overdue", nullable = false)
 	private boolean notifyLentOverdue = true;
 
+	// See V9__session_version.sql: sessions that logged in with an older number are ended.
+	@Column(name = "session_version", nullable = false)
+	private int sessionVersion;
+
 	protected AppUser() {
 		// for JPA
 	}
@@ -53,9 +57,20 @@ public class AppUser {
 		this.notifyLentOverdue = notifyLentOverdue;
 	}
 
-	// After a password reset; the caller has already hashed it.
+	// After a password change or reset; the caller has already hashed it. Every session that is
+	// logged in now is ended, because one of them may belong to whoever knew the old password.
 	public void changePasswordHash(String passwordHash) {
 		this.passwordHash = passwordHash;
+		endAllSessions();
+	}
+
+	// "Log out everywhere". The caller logs the current session in again if it should stay.
+	public void endAllSessions() {
+		sessionVersion++;
+	}
+
+	public int getSessionVersion() {
+		return sessionVersion;
 	}
 
 	// From an unsubscribe link: turns one kind of email off and leaves the other as it is.

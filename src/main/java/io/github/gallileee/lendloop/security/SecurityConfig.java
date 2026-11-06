@@ -1,11 +1,13 @@
 package io.github.gallileee.lendloop.security;
 
+import io.github.gallileee.lendloop.user.AppUserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
@@ -18,7 +20,8 @@ public class SecurityConfig {
 	// Everything needs a login except sign-up, login and the stylesheet.
 	// CSRF protection stays on; Thymeleaf adds the token to every POST form.
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http, LoginThrottle loginThrottle) throws Exception {
+	SecurityFilterChain securityFilterChain(HttpSecurity http, LoginThrottle loginThrottle, AppUserRepository users)
+			throws Exception {
 		http
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/login", "/register", "/css/**", "/error").permitAll()
@@ -36,6 +39,8 @@ public class SecurityConfig {
 				.permitAll())
 			// Too many failed logins: refused before the password is checked (after the CSRF check).
 			.addFilterBefore(new LoginThrottleFilter(loginThrottle), UsernamePasswordAuthenticationFilter.class)
+			// Sessions from before a password change or "log out everywhere" end here.
+			.addFilterBefore(new SessionVersionFilter(users), AuthorizationFilter.class)
 			// RFC 8058: the mail provider POSTs to the unsubscribe link without cookies, so it can't
 			// send a CSRF token. The signature in the link already proves it came from our email.
 			.csrf(csrf -> csrf.ignoringRequestMatchers("/unsubscribe"))
