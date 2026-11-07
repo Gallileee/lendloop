@@ -45,6 +45,10 @@ public class AppGroup {
 		this.inviteExpiresAt = expiresAt;
 	}
 
+	public void rename(String name) {
+		this.name = name;
+	}
+
 	public boolean isInviteValidAt(Instant now) {
 		return now.isBefore(inviteExpiresAt);
 	}

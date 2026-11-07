@@ -227,6 +227,31 @@ section + section, .card + section, section + .card { margin-top: 24px; }
 .item-list h3.item-name { font-size: 1.0625rem; margin: 0; }
 .leave { margin-top: 24px; }
 
+.member-list li > span:first-child { overflow-wrap: anywhere; }
+.member-actions { margin-left: auto; position: relative; }
+.member-actions summary { list-style: none; font-size: 0.875rem; }
+.member-actions summary::-webkit-details-marker { display: none; }
+.member-actions-menu {
+  position: absolute;
+  right: 0;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+  white-space: nowrap;
+}
+.member-actions-menu form { margin: 0; }
+.member-actions-menu .button { width: 100%; }
+.group-settings h3 { font-size: 1rem; margin: 0; }
+.danger-zone { border-top: 1px solid var(--border); padding-top: 16px; margin-bottom: 0; }
+.danger-zone p { margin: 0; }
+.danger-zone .button { justify-self: start; }
+
 /* --- loans --- */
 .badge {
   display: inline-block;

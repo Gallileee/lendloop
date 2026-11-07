@@ -200,7 +200,7 @@ class GroupTests extends WebTest {
 
 		mvc.perform(post("/groups/{id}/leave", group.getId()).with(as(alex)).with(csrf()))
 			.andExpect(redirectedUrl("/groups/" + group.getId()))
-			.andExpect(flash().attribute("error", "You created this group, so you can't leave it."));
+			.andExpect(flash().attribute("error", "You own this group, so you can't leave it. Hand it over to another member first, or delete it."));
 		mvc.perform(post("/groups/{id}/leave", group.getId()).with(as(sam)).with(csrf()))
 			.andExpect(redirectedUrl("/groups"));
 

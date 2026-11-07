@@ -1,5 +1,35 @@
 # Progress log
 
+## 2026-11-07: Milestone 3l, group management
+
+Why: next step 1. A group couldn't be renamed or deleted, the owner couldn't remove anyone (e.g. a flatmate who moved out), and the owner could never leave because nobody could take over.
+
+Done:
+- `GroupService`:
+  - `rename` (same validation as a new group);
+  - `removeMember`: also replaces the invite link, because the removed person knows the old one and could rejoin with it. Agreed loans are left alone;
+  - `handOver`: the owner and the chosen member swap roles in one transaction (never two owners or none). The old owner stays in as a member and may then leave;
+  - `delete`: needs the group's name typed again (exact, trimmed). Memberships are deleted with one bulk statement, then the group. Items and loans belong to people, so they stay.
+  - A shared `ownership` check: non-members get 404 (as before, the group's existence isn't revealed), members who aren't the owner get 403. A named user who isn't in the group gives 404 (`MemberNotFoundException`).
+  - Rule breaks the owner can cause (removing themselves, handing over to themselves, a wrong name) are a `GroupRuleException` shown as a flash error.
+- `GroupController`: `POST /groups/{id}/rename`, `/members/{userId}/remove`, `/owner`, `/delete`. All POST with CSRF.
+- Group page: a *Manage* menu next to each other member for the owner (*Make owner*, *Remove*, each with a confirm dialog), and a *Group settings* card (rename; delete with the name typed in). The owner's leave error now says to hand over or delete.
+- No migration needed: the roles already lived in `group_member.role`.
+- Tests: `GroupManagementTests` (11), `GroupTests` message updated. 234 in total locally.
+
+Found by the tests: deleting the group failed with `TransientPropertyValueException`. The owner's membership, loaded earlier in the same transaction, still pointed at the group. The bulk delete now clears the persistence context (`@Modifying(clearAutomatically = true)`), and the group is deleted by id.
+
+Verified locally:
+- `./mvnw test`: 234 run, 0 failures, 5 skipped (PostgreSQL, no Docker; CI runs them).
+- Mutation check: without the invite replacement in `removeMember`, `removingAMemberEndsTheirAccessAndReplacesTheInviteLink` fails. Restored afterwards.
+
+Not verified: the page in a browser. Starting `lendloop-memory-demo` was declined in this automated run. To check by hand: start it, sign up two accounts, create a group, join with the second one, then as the owner try *Manage* → *Make owner* / *Remove*, rename, and delete with a wrong and the right name, also at 375 px (the *Manage* menu is absolutely positioned and could overflow on a phone).
+
+Trade-offs:
+- Removing a member doesn't cancel their open borrow requests. The item's owner still decides; cancelling would need a "do they still share any group" check per request.
+- The typed-name check is case-sensitive, like GitHub's, so "flat 4b" doesn't delete "Flat 4B".
+- No email to a removed member or a new owner yet.
+
 ## 2026-11-06: Milestone 3k, email confirmation at sign-up
 
 Why: next step 1. Anyone could sign up with someone else's address, and that person would then get our loan reminders. Confirming the address first is also expected before a deployment.
@@ -451,7 +481,7 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Group management: rename, delete, owner removes a member, hand over ownership.
+1. Browser check of the group management controls (see 2026-11-07), especially the *Manage* menu at 375 px.
 2. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
 3. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
 4. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
