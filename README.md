@@ -8,7 +8,7 @@ People keep asking online for an app that tracks what they own, what they want a
 
 ## Status
 
-**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, and search on the group page (see [Roadmap](#roadmap)).
+**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, search on the group page, and group management (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -41,8 +41,13 @@ People keep asking online for an app that tracks what they own, what they want a
   - Create a group and share its **invite link**. It holds a random 256-bit token and expires after 7 days.
   - The group page lists the members and everything they mark as lendable, with who owns it.
   - **Search the group's things:** by text in the name or description (so a book's author works too), by category, and "free right now" (leaves out what's lent out). Typing or scanning an ISBN in any format finds the book. The search is a plain GET form, so a search can be bookmarked or shared, and the count shows "2 of 9". `%` and `_` in the search box are taken literally.
-  - Only members can see a group (others get 404). Only its creator manages the invite link: they can make a new one, which disables the old one at once.
-  - Members can leave a group. The creator can't, so a group always has someone who manages the link.
+  - Only members can see a group (others get 404). Only its owner (at first, whoever created it) manages the invite link: they can make a new one, which disables the old one at once.
+  - **Managing a group** (owner only; other members get 403):
+    - **Rename** it, with the same rules as a new group.
+    - **Remove a member.** The invite link is replaced at the same time, since the removed person knows the old one. Loans already agreed carry on: the thing still has to come back.
+    - **Hand the group over** to another member. The two roles swap in one transaction, so there is always exactly one owner. The old owner stays as a member and may then leave.
+    - **Delete** it, after typing its name again (like deleting a GitHub repository). Only the group and its memberships go; everyone's things and loans stay.
+  - Members can leave a group. The owner can't, so a group always has someone who manages it; they hand it over or delete it instead.
 - **Invite links are safe to paste into a chat.**
   - Opening the link only asks "Join …?". Joining needs a POST, so a chat app's link preview can't add anyone.
   - Someone logged out is sent to the login page (or sign-up) and then back to the invite.
@@ -151,6 +156,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `ItemFilterTest`: turning query parameters into a filter (trimming, cutting, unknown categories ignored) and escaping `%`, `_` and `\` for LIKE (no Spring).
 - `GroupSearchTests`: the group search against the database: name and description ignoring case, wildcards taken literally, ISBN in any format, category, "free right now" with a lent-out item, the "2 of 4" count, the form keeping its values, "nothing matches" vs an empty group, bad parameters ignored, and outsiders still getting 404.
+- `GroupManagementTests`: rename (with validation), removing a member (they lose access, the old invite link stops working, an agreed loan carries on), handing over (roles swap, the old owner can then leave), deleting only with the exact name typed (things are kept, the link dies), and 403 for members / 404 for outsiders on every owner action.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
 - `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered search), loan, reminder, password-reset and email-confirmation queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
@@ -187,7 +193,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - A borrower outside the app is just a name, with no contact details, so their reminders go to the owner. Earlier names are suggested and a name typed in different case is merged, but a typo ("Granma") is still a new person.
 - Invite tokens are stored in plain text so the owner can see the link again. Anyone with read access to the database could use a link until it expires.
 - The invite expiry is shown in the server's time zone. Behind a reverse proxy, set `server.forward-headers-strategy=framework` so invite links use the public host and https.
-- Groups can't be renamed or deleted, and members can't be removed by the owner yet.
+- Removing a member, or leaving, doesn't withdraw their open borrow requests; the item's owner still sees and answers them. A removed member is told nothing.
 - Sign-up says when an email is already registered, which reveals that the account exists. That's acceptable for an app between friends, but it should change before a public launch.
 - Signing up with someone else's address still creates an account (it just never gets emails, and its password can't be reset without the inbox). Unconfirmed accounts aren't deleted after a while yet.
 - Without a mail server, the reset and confirmation emails (with their links) only goes to the log. That's meant for local runs; configure mail before others use the app.
@@ -202,7 +208,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done).
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done); ~~group management: rename, remove members, hand over, delete~~ (done).
 4. Later: photos, installable PWA, iCal feed of due dates, Czech translation, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).

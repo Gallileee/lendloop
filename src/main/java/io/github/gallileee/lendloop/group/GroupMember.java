@@ -17,7 +17,8 @@ import java.time.Instant;
 public class GroupMember {
 
 	public enum Role {
-		// Created the group; manages the invite link and can't leave.
+		// Exactly one per group: manages the group and the invite link, and can't leave
+		// (hand the group over first, or delete it).
 		OWNER,
 		MEMBER
 	}
@@ -50,6 +51,15 @@ public class GroupMember {
 		this.user = user;
 		this.role = role;
 		this.joinedAt = joinedAt;
+	}
+
+	// Handing a group over swaps the roles of two members in one transaction.
+	void becomeOwner() {
+		this.role = Role.OWNER;
+	}
+
+	void becomeMember() {
+		this.role = Role.MEMBER;
 	}
 
 	public boolean isOwner() {

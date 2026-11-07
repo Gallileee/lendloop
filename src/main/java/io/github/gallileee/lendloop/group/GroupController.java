@@ -89,13 +89,68 @@ public class GroupController {
 		return "redirect:/groups/" + id;
 	}
 
+	// Errors go back as a flash message: the form sits on the group page, which needs its own model.
+	@PostMapping("/{id}/rename")
+	String rename(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id,
+			@Valid @ModelAttribute("renameForm") GroupForm form, BindingResult result, RedirectAttributes redirect) {
+		if (result.hasErrors()) {
+			redirect.addFlashAttribute("error", result.getFieldError("name").getDefaultMessage());
+			return "redirect:/groups/" + id + "#settings";
+		}
+		AppGroup group = groupService.rename(id, me.id(), form);
+		redirect.addFlashAttribute("message", "Group renamed to " + group.getName() + ".");
+		return "redirect:/groups/" + id;
+	}
+
+	@PostMapping("/{id}/members/{userId}/remove")
+	String removeMember(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id,
+			@PathVariable Long userId, RedirectAttributes redirect) {
+		try {
+			String name = groupService.removeMember(id, me.id(), userId);
+			redirect.addFlashAttribute("message",
+					name + " is no longer in the group. The invite link was replaced, so they can't rejoin with it.");
+		}
+		catch (GroupService.GroupRuleException e) {
+			redirect.addFlashAttribute("error", e.getMessage());
+		}
+		return "redirect:/groups/" + id;
+	}
+
+	@PostMapping("/{id}/owner")
+	String handOver(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id, @RequestParam Long userId,
+			RedirectAttributes redirect) {
+		try {
+			String name = groupService.handOver(id, me.id(), userId);
+			redirect.addFlashAttribute("message", name + " owns the group now. You're still a member.");
+		}
+		catch (GroupService.GroupRuleException e) {
+			redirect.addFlashAttribute("error", e.getMessage());
+		}
+		return "redirect:/groups/" + id;
+	}
+
+	@PostMapping("/{id}/delete")
+	String delete(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id,
+			@RequestParam(required = false) String confirmName, RedirectAttributes redirect) {
+		try {
+			String name = groupService.delete(id, me.id(), confirmName);
+			redirect.addFlashAttribute("message", name + " was deleted. Everyone's things and loans are kept.");
+			return "redirect:/groups";
+		}
+		catch (GroupService.GroupRuleException e) {
+			redirect.addFlashAttribute("error", e.getMessage());
+			return "redirect:/groups/" + id + "#settings";
+		}
+	}
+
 	@PostMapping("/{id}/leave")
 	String leave(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id, RedirectAttributes redirect) {
 		try {
 			groupService.leave(id, me.id());
 		}
 		catch (GroupService.OwnerCannotLeaveException e) {
-			redirect.addFlashAttribute("error", "You created this group, so you can't leave it.");
+			redirect.addFlashAttribute("error",
+					"You own this group, so you can't leave it. Hand it over to another member first, or delete it.");
 			return "redirect:/groups/" + id;
 		}
 		redirect.addFlashAttribute("message", "You left the group.");

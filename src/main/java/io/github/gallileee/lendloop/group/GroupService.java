@@ -15,7 +15,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// Groups and membership. Only members can see a group; only its owner manages the invite link.
+// Groups and membership. Only members can see a group; only its owner manages it (invite link, name,
+// members, handing over, deleting). A non-member gets a 404, a member who isn't the owner a 403.
 @Service
 public class GroupService {
 
@@ -81,13 +82,62 @@ public class GroupService {
 
 	@Transactional
 	public AppGroup replaceInvite(Long groupId, Long userId) {
-		GroupMember me = membership(groupId, userId);
-		if (!me.isOwner()) {
-			throw new AccessDeniedException("Only the group owner can replace the invite link");
-		}
-		AppGroup group = me.getGroup();
-		group.replaceInvite(tokens.next(), clock.instant().plus(INVITE_VALIDITY));
+		AppGroup group = ownership(groupId, userId).getGroup();
+		newInvite(group);
 		return group;
+	}
+
+	@Transactional
+	public AppGroup rename(Long groupId, Long userId, GroupForm form) {
+		AppGroup group = ownership(groupId, userId).getGroup();
+		group.rename(form.getName().trim());
+		return group;
+	}
+
+	// Removes someone else from the group and returns their name for the confirmation message.
+	// The invite link is replaced too: the removed member knows it and could otherwise just rejoin.
+	// Loans already agreed are left alone: the thing still has to come back.
+	@Transactional
+	public String removeMember(Long groupId, Long ownerId, Long memberUserId) {
+		GroupMember owner = ownership(groupId, ownerId);
+		if (ownerId.equals(memberUserId)) {
+			throw new GroupRuleException("You can't remove yourself. Hand the group over first, or delete it.");
+		}
+		GroupMember member = otherMember(groupId, memberUserId);
+		String name = member.getUser().getDisplayName();
+		members.delete(member);
+		newInvite(owner.getGroup());
+		return name;
+	}
+
+	// Makes another member the owner; the current owner stays in the group as a member (and may
+	// then leave). Both rows change in one transaction, so there is never a moment with two
+	// owners or none.
+	@Transactional
+	public String handOver(Long groupId, Long ownerId, Long newOwnerUserId) {
+		GroupMember owner = ownership(groupId, ownerId);
+		if (ownerId.equals(newOwnerUserId)) {
+			throw new GroupRuleException("You already own this group.");
+		}
+		GroupMember next = otherMember(groupId, newOwnerUserId);
+		owner.becomeMember();
+		next.becomeOwner();
+		return next.getUser().getDisplayName();
+	}
+
+	// Deleting needs the group's name typed again, like GitHub does for repositories: a button alone
+	// is too easy to press by mistake, and this can't be undone. Items and loans belong to people,
+	// not groups, so they stay; only the group and its memberships go.
+	@Transactional
+	public String delete(Long groupId, Long ownerId, String typedName) {
+		AppGroup group = ownership(groupId, ownerId).getGroup();
+		if (typedName == null || !typedName.trim().equals(group.getName())) {
+			throw new GroupRuleException("Type the group's name exactly to delete it.");
+		}
+		String name = group.getName();
+		members.deleteByGroupId(groupId);
+		groups.deleteById(groupId);
+		return name;
 	}
 
 	// The group an invite link leads to, or empty when the token is unknown or expired.
@@ -124,6 +174,24 @@ public class GroupService {
 		members.delete(me);
 	}
 
+	private void newInvite(AppGroup group) {
+		group.replaceInvite(tokens.next(), clock.instant().plus(INVITE_VALIDITY));
+	}
+
+	private GroupMember ownership(Long groupId, Long userId) {
+		GroupMember me = membership(groupId, userId);
+		if (!me.isOwner()) {
+			throw new AccessDeniedException("Only the group owner can do this");
+		}
+		return me;
+	}
+
+	// Another member of the group (with their user loaded for the name), or 404.
+	private GroupMember otherMember(Long groupId, Long userId) {
+		return members.findByGroupIdAndUserIdWithUser(groupId, userId)
+			.orElseThrow(() -> new MemberNotFoundException(userId));
+	}
+
 	private GroupMember membership(Long groupId, Long userId) {
 		return members.findByGroupIdAndUserId(groupId, userId).orElseThrow(() -> new GroupNotFoundException(groupId));
 	}
@@ -132,6 +200,14 @@ public class GroupService {
 
 		OwnerCannotLeaveException() {
 			super("The owner can't leave their own group");
+		}
+	}
+
+	// A request the owner may make, but not in this state; the message is shown to them as it is.
+	public static class GroupRuleException extends RuntimeException {
+
+		GroupRuleException(String message) {
+			super(message);
 		}
 	}
 }

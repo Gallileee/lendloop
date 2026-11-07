@@ -108,8 +108,43 @@
           <span th:text="${m.user.displayName}">Sam</span>
           <span th:if="${m.user.id == page.me.user.id}" class="muted">(you)</span>
           <span th:if="${m.owner}" class="tag">Owner</span>
+          <details th:if="${page.me.owner and !m.owner}" class="member-actions">
+            <summary class="link-button" th:attr="aria-label='Manage ' + ${m.user.displayName}">Manage</summary>
+            <div class="member-actions-menu">
+              <form th:action="@{/groups/{id}/owner(id=${page.group.id})}" method="post"
+                    th:attr="data-confirm='Make ' + ${m.user.displayName} + ' the owner? You will stay in the group as a member and can no longer manage it.'">
+                <input type="hidden" name="userId" th:value="${m.user.id}">
+                <button type="submit" class="button button-secondary">Make owner</button>
+              </form>
+              <form th:action="@{/groups/{id}/members/{userId}/remove(id=${page.group.id},userId=${m.user.id})}"
+                    method="post"
+                    th:attr="data-confirm='Remove ' + ${m.user.displayName} + ' from ' + ${page.group.name} + '? The invite link will be replaced.'">
+                <button type="submit" class="button button-danger">Remove</button>
+              </form>
+            </div>
+          </details>
         </li>
       </ul>
+    </section>
+
+    <section th:if="${page.me.owner}" class="card group-settings" id="settings">
+      <h2>Group settings</h2>
+      <form th:action="@{/groups/{id}/rename(id=${page.group.id})}" method="post" class="form form-inline">
+        <label>Name
+          <input type="text" name="name" th:value="${page.group.name}" maxlength="60" required>
+        </label>
+        <button type="submit" class="button button-secondary">Rename</button>
+      </form>
+      <form th:action="@{/groups/{id}/delete(id=${page.group.id})}" method="post" class="form danger-zone">
+        <h3>Delete this group</h3>
+        <p class="muted">
+          Everyone loses access to the group. Their things and loans are kept. This can't be undone.
+        </p>
+        <label>Type <strong th:text="${page.group.name}">Flat 4B</strong> to confirm
+          <input type="text" name="confirmName" maxlength="60" autocomplete="off" required>
+        </label>
+        <button type="submit" class="button button-danger">Delete group</button>
+      </form>
     </section>
 
     <form th:unless="${page.me.owner}" th:action="@{/groups/{id}/leave(id=${page.group.id})}" method="post"
