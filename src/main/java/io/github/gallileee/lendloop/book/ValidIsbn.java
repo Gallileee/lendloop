@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
 @Constraint(validatedBy = ValidIsbn.Validator.class)
 public @interface ValidIsbn {
 
-	String message() default "That isn't a valid ISBN. Check the digits on the back of the book.";
+	String message() default "{validation.isbn}";
 
 	Class<?>[] groups() default {};
 

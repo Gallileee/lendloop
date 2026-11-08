@@ -100,26 +100,26 @@ public class Loan {
 	}
 
 	public void approve(LocalDate dueDate, Instant now) {
-		requireStatus(LoanStatus.REQUESTED, "This request was already answered or withdrawn.");
+		requireStatus(LoanStatus.REQUESTED, "loan.rule.alreadyAnswered");
 		this.dueDate = dueDate;
 		this.decidedAt = now;
 		moveTo(LoanStatus.ACTIVE);
 	}
 
 	public void decline(Instant now) {
-		requireStatus(LoanStatus.REQUESTED, "This request was already answered or withdrawn.");
+		requireStatus(LoanStatus.REQUESTED, "loan.rule.alreadyAnswered");
 		this.decidedAt = now;
 		moveTo(LoanStatus.DECLINED);
 	}
 
 	public void cancel(Instant now) {
-		requireStatus(LoanStatus.REQUESTED, "This request was already answered, so it can't be withdrawn.");
+		requireStatus(LoanStatus.REQUESTED, "loan.rule.cannotWithdraw");
 		this.decidedAt = now;
 		moveTo(LoanStatus.CANCELLED);
 	}
 
 	public void markReturned(Instant now) {
-		requireStatus(LoanStatus.ACTIVE, "Only an item that is lent out can be marked as returned.");
+		requireStatus(LoanStatus.ACTIVE, "loan.rule.notLentOut");
 		this.returnedAt = now;
 		moveTo(LoanStatus.RETURNED);
 	}
@@ -170,9 +170,9 @@ public class Loan {
 		return reminderDueOn(today).filter(ReminderKind.OVERDUE::equals).isPresent() && firstOverdueReminder;
 	}
 
-	private void requireStatus(LoanStatus expected, String userMessage) {
+	private void requireStatus(LoanStatus expected, String messageCode) {
 		if (status != expected) {
-			throw new LoanRuleException(userMessage);
+			throw new LoanRuleException(messageCode);
 		}
 	}
 

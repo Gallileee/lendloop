@@ -1,99 +1,103 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments :: head(${page.group.name})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main>
-    <p class="breadcrumb"><a th:href="@{/groups}">Groups</a></p>
+    <p class="breadcrumb"><a th:href="@{/groups}" th:text="#{nav.groups}">Groups</a></p>
     <h1 th:text="${page.group.name}">Flat 4B</h1>
 
     <p th:if="${message}" class="notice" role="status" th:text="${message}">Group created.</p>
     <p th:if="${error}" class="alert" role="alert" th:text="${error}">You can't leave.</p>
 
     <section th:if="${inviteUrl}" class="card invite">
-      <h2>Invite friends</h2>
+      <h2 th:text="#{group.invite.title}">Invite friends</h2>
       <p class="muted">
-        Anyone with this link can join until
+        <th:block th:text="#{group.invite.until}">Anyone with this link can join until</th:block>
         <time th:datetime="${page.group.inviteExpiresAt}"
               th:text="${inviteExpiresOn}">10 Nov 2026, 14:30</time>.
-        Share it only with people you'd lend to.
+        <th:block th:text="#{group.invite.share}">Share it only with people you'd lend to.</th:block>
       </p>
       <div class="invite-row">
-        <input type="text" id="invite-url" th:value="${inviteUrl}" readonly aria-label="Invite link">
-        <button type="button" class="button" data-copy="invite-url">Copy</button>
+        <input type="text" id="invite-url" th:value="${inviteUrl}" readonly th:attr="aria-label=#{group.invite.label}">
+        <button type="button" class="button" data-copy="invite-url" th:attr="data-copied=#{group.invite.copied}"
+                th:text="#{group.invite.copy}">Copy</button>
       </div>
       <form th:action="@{/groups/{id}/invite(id=${page.group.id})}" method="post"
-            data-confirm="Make a new link? The current one will stop working.">
-        <button type="submit" class="link-button">Make a new link</button>
+            th:attr="data-confirm=#{group.invite.renew.confirm}">
+        <button type="submit" class="link-button" th:text="#{group.invite.renew}">Make a new link</button>
       </form>
     </section>
 
     <section>
-      <h2 class="section-title" id="things">Things you can borrow
-        <span class="count" th:text="${page.filter.active} ? ${#lists.size(page.items)} + ' of ' + ${page.lendableCount}
+      <h2 class="section-title" id="things"><th:block th:text="#{group.things}">Things you can borrow</th:block>
+        <span class="count" th:text="${page.filter.active} ? #{group.things.filtered(${#lists.size(page.items)}, ${page.lendableCount})}
                                                           : ${page.lendableCount}">3</span></h2>
       <p th:if="${page.lendableCount == 0}" class="card empty muted">
-        Nobody in this group has anything to lend yet. Add your things under
-        <a th:href="@{/items}">My things</a> and keep "Friends can ask to borrow it" on.
+        <th:block th:text="#{group.things.none}">Nobody in this group has anything to lend yet. Add your things under</th:block>
+        <a th:href="@{/items}" th:text="#{nav.myThings}">My things</a>
+        <th:block th:text="#{group.things.none.after}">and keep "Friends can ask to borrow it" on.</th:block>
       </p>
       <!-- GET, so a search can be bookmarked, shared in the group chat and reloaded safely. -->
       <form th:if="${page.lendableCount > 0}" th:action="@{/groups/{id}(id=${page.group.id})}" method="get"
-            class="filter" role="search" aria-label="Search this group's things">
-        <label class="filter-text">Search
+            class="filter" role="search" th:attr="aria-label=#{group.search.label}">
+        <label class="filter-text"><th:block th:text="#{group.search.text}">Search</th:block>
           <input type="search" name="q" th:value="${page.filter.text}" maxlength="100"
-                 placeholder="Name, author, ISBN…" autocomplete="off">
+                 th:placeholder="#{group.search.placeholder}" autocomplete="off">
         </label>
-        <label>Category
+        <label><th:block th:text="#{itemForm.category}">Category</th:block>
           <select name="category">
-            <option value="">Any</option>
-            <option th:each="c : ${categories}" th:value="${c.name()}" th:text="${c.label}"
+            <option value="" th:text="#{group.search.anyCategory}">Any</option>
+            <option th:each="c : ${categories}" th:value="${c.name()}" th:text="#{${c.messageCode}}"
                     th:selected="${c.name() == page.filter.categoryName}">Book</option>
           </select>
         </label>
         <label class="checkbox">
           <input type="checkbox" name="available" value="true" th:checked="${page.filter.availableNow}">
-          Free right now
+          <th:block th:text="#{group.search.freeNow}">Free right now</th:block>
         </label>
         <div class="filter-actions">
-          <button type="submit" class="button">Search</button>
+          <button type="submit" class="button" th:text="#{group.search.submit}">Search</button>
           <a th:if="${page.filter.active}" class="button button-secondary"
-             th:href="@{/groups/{id}(id=${page.group.id})}">Clear</a>
+             th:href="@{/groups/{id}(id=${page.group.id})}" th:text="#{group.search.clear}">Clear</a>
         </div>
       </form>
       <p th:if="${page.lendableCount > 0 and #lists.isEmpty(page.items)}" class="card empty muted" role="status">
-        Nothing matches your search.
-        <a th:href="@{/groups/{id}(id=${page.group.id})}">Show everything</a>
+        <th:block th:text="#{group.search.noMatch}">Nothing matches your search.</th:block>
+        <a th:href="@{/groups/{id}(id=${page.group.id})}" th:text="#{group.search.showAll}">Show everything</a>
       </p>
       <ul th:unless="${#lists.isEmpty(page.items)}" class="item-list">
         <li th:each="item : ${page.items}" class="card item">
           <div class="item-main">
             <h3 class="item-name" th:text="${item.name}">Catan</h3>
             <p class="item-meta">
-              <span class="tag" th:text="${item.category.label}">Board game</span>
-              <span th:if="${item.owner.id == page.me.user.id}" class="status status-off">Yours</span>
+              <span class="tag" th:text="#{${item.category.messageCode}}">Board game</span>
+              <span th:if="${item.owner.id == page.me.user.id}" class="status status-off" th:text="#{group.item.yours}">Yours</span>
               <span th:unless="${item.owner.id == page.me.user.id}" class="muted"
-                    th:text="'from ' + ${item.owner.displayName}">from Sam</span>
+                    th:text="#{common.from(${item.owner.displayName})}">from Sam</span>
             </p>
             <p th:if="${item.description}" class="item-description" th:text="${item.description}">Base game.</p>
           </div>
           <div class="item-actions" th:with="mine=${item.owner.id == page.me.user.id},
                                               active=${loans.activeLoan(item.id)}">
-            <span th:if="${active != null and active.isBorrowedBy(page.me.user.id)}" class="status status-on">You have it</span>
+            <span th:if="${active != null and active.isBorrowedBy(page.me.user.id)}" class="status status-on"
+                  th:text="#{group.item.youHaveIt}">You have it</span>
             <span th:if="${active != null and !active.isBorrowedBy(page.me.user.id)}" class="status status-off"
-                  th:text="${mine} ? 'Lent to ' + ${active.borrowerDisplayName} : 'On loan'">On loan</span>
+                  th:text="${mine} ? #{common.lentTo(${active.borrowerDisplayName})} : #{group.item.onLoan}">On loan</span>
             <a th:if="${active == null and loans.isRequestedByMe(item.id)}" class="status status-off"
-               th:href="@{/loans}">Requested</a>
+               th:href="@{/loans}" th:text="#{group.item.requested}">Requested</a>
             <details th:if="${active == null and !mine and !loans.isRequestedByMe(item.id)}" class="ask">
-              <summary class="button button-secondary">Ask to borrow</summary>
+              <summary class="button button-secondary" th:text="#{group.ask}">Ask to borrow</summary>
               <form th:action="@{/loans}" method="post" class="form ask-form">
                 <input type="hidden" name="itemId" th:value="${item.id}">
                 <input type="hidden" name="groupId" th:value="${page.group.id}">
-                <label>Message <span class="muted">(optional)</span>
+                <label><th:block th:text="#{group.ask.message}">Message</th:block>
+                  <span class="muted" th:text="#{common.optional}">(optional)</span>
                   <textarea name="message" rows="2" maxlength="300"
-                            placeholder="When you need it, for how long"></textarea>
+                            th:placeholder="#{group.ask.message.placeholder}"></textarea>
                 </label>
                 <button type="submit" class="button"
-                        th:text="'Ask ' + ${item.owner.displayName}">Ask Sam</button>
+                        th:text="#{group.ask.submit(${item.owner.displayName})}">Ask Sam</button>
               </form>
             </details>
           </div>
@@ -102,24 +106,26 @@
     </section>
 
     <section>
-      <h2 class="section-title">Members <span class="count" th:text="${#lists.size(page.members)}">2</span></h2>
+      <h2 class="section-title"><th:block th:text="#{group.members}">Members</th:block>
+        <span class="count" th:text="${#lists.size(page.members)}">2</span></h2>
       <ul class="member-list card">
         <li th:each="m : ${page.members}">
           <span th:text="${m.user.displayName}">Sam</span>
-          <span th:if="${m.user.id == page.me.user.id}" class="muted">(you)</span>
-          <span th:if="${m.owner}" class="tag">Owner</span>
+          <span th:if="${m.user.id == page.me.user.id}" class="muted" th:text="#{group.you}">(you)</span>
+          <span th:if="${m.owner}" class="tag" th:text="#{common.owner}">Owner</span>
           <details th:if="${page.me.owner and !m.owner}" class="member-actions">
-            <summary class="link-button" th:attr="aria-label='Manage ' + ${m.user.displayName}">Manage</summary>
+            <summary class="link-button" th:attr="aria-label=#{group.manage.label(${m.user.displayName})}"
+                     th:text="#{group.manage}">Manage</summary>
             <div class="member-actions-menu">
               <form th:action="@{/groups/{id}/owner(id=${page.group.id})}" method="post"
-                    th:attr="data-confirm='Make ' + ${m.user.displayName} + ' the owner? You will stay in the group as a member and can no longer manage it.'">
+                    th:attr="data-confirm=#{group.makeOwner.confirm(${m.user.displayName})}">
                 <input type="hidden" name="userId" th:value="${m.user.id}">
-                <button type="submit" class="button button-secondary">Make owner</button>
+                <button type="submit" class="button button-secondary" th:text="#{group.makeOwner}">Make owner</button>
               </form>
               <form th:action="@{/groups/{id}/members/{userId}/remove(id=${page.group.id},userId=${m.user.id})}"
                     method="post"
-                    th:attr="data-confirm='Remove ' + ${m.user.displayName} + ' from ' + ${page.group.name} + '? The invite link will be replaced.'">
-                <button type="submit" class="button button-danger">Remove</button>
+                    th:attr="data-confirm=#{group.remove.confirm(${m.user.displayName}, ${page.group.name})}">
+                <button type="submit" class="button button-danger" th:text="#{group.remove}">Remove</button>
               </form>
             </div>
           </details>
@@ -128,28 +134,30 @@
     </section>
 
     <section th:if="${page.me.owner}" class="card group-settings" id="settings">
-      <h2>Group settings</h2>
+      <h2 th:text="#{group.settings}">Group settings</h2>
       <form th:action="@{/groups/{id}/rename(id=${page.group.id})}" method="post" class="form form-inline">
-        <label>Name
+        <label><th:block th:text="#{group.rename.name}">Name</th:block>
           <input type="text" name="name" th:value="${page.group.name}" maxlength="60" required>
         </label>
-        <button type="submit" class="button button-secondary">Rename</button>
+        <button type="submit" class="button button-secondary" th:text="#{group.rename}">Rename</button>
       </form>
       <form th:action="@{/groups/{id}/delete(id=${page.group.id})}" method="post" class="form danger-zone">
-        <h3>Delete this group</h3>
-        <p class="muted">
+        <h3 th:text="#{group.delete.title}">Delete this group</h3>
+        <p class="muted" th:text="#{group.delete.text}">
           Everyone loses access to the group. Their things and loans are kept. This can't be undone.
         </p>
-        <label>Type <strong th:text="${page.group.name}">Flat 4B</strong> to confirm
+        <label><th:block th:text="#{group.delete.typeBefore}">Type</th:block>
+          <strong th:text="${page.group.name}">Flat 4B</strong>
+          <th:block th:text="#{group.delete.typeAfter}">to confirm</th:block>
           <input type="text" name="confirmName" maxlength="60" autocomplete="off" required>
         </label>
-        <button type="submit" class="button button-danger">Delete group</button>
+        <button type="submit" class="button button-danger" th:text="#{group.delete.submit}">Delete group</button>
       </form>
     </section>
 
     <form th:unless="${page.me.owner}" th:action="@{/groups/{id}/leave(id=${page.group.id})}" method="post"
-          th:attr="data-confirm='Leave ' + ${page.group.name} + '?'" class="leave">
-      <button type="submit" class="button button-danger">Leave group</button>
+          th:attr="data-confirm=#{group.leave.confirm(${page.group.name})}" class="leave">
+      <button type="submit" class="button button-danger" th:text="#{group.leave}">Leave group</button>
     </form>
   </main>
   <script>
@@ -162,10 +170,11 @@
     document.querySelectorAll("[data-copy]").forEach((button) =>
       button.addEventListener("click", async () => {
         const input = document.getElementById(button.dataset.copy)
+        const label = button.textContent
         try {
           await navigator.clipboard.writeText(input.value)
-          button.textContent = "Copied"
-          setTimeout(() => (button.textContent = "Copy"), 2000)
+          button.textContent = button.dataset.copied
+          setTimeout(() => (button.textContent = label), 2000)
         } catch {
           input.select()
         }

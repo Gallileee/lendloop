@@ -1,35 +1,35 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Unsubscribe')}"></head>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(#{unsubscribe.pageTitle})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main class="narrow">
     <th:block th:if="${state == 'confirm'}">
-      <h1>Stop these emails?</h1>
-      <p class="lead">
-        You won't get <span th:text="${list.description}">reminders about things you borrowed</span>
-        any more. You can turn them back on in your settings at any time.
+      <h1 th:text="#{unsubscribe.confirm.title}">Stop these emails?</h1>
+      <p class="lead" th:with="what=#{${list.messageCode}}" th:text="#{unsubscribe.confirm.lead(${what})}">
+        You won't get reminders about things you borrowed any more.
       </p>
       <!-- The signed parameters go in the URL, like in the mail provider's one-click POST. -->
       <form th:action="@{/unsubscribe(user=${user},list=${list.name()},sig=${sig})}" method="post"
             class="form-actions">
-        <button type="submit" class="button">Unsubscribe</button>
-        <a class="button button-secondary" th:href="@{/settings}">Go to settings</a>
+        <button type="submit" class="button" th:text="#{unsubscribe.submit}">Unsubscribe</button>
+        <a class="button button-secondary" th:href="@{/settings}" th:text="#{unsubscribe.toSettings}">Go to settings</a>
       </form>
     </th:block>
     <th:block th:if="${state == 'done'}">
-      <h1>You're unsubscribed</h1>
-      <p class="notice" role="status">
-        You won't get <span th:text="${list.description}">reminders about things you borrowed</span>
-        any more.
+      <h1 th:text="#{unsubscribe.done.title}">You're unsubscribed</h1>
+      <p class="notice" role="status" th:with="what=#{${list.messageCode}}" th:text="#{unsubscribe.done.text(${what})}">
+        You won't get reminders about things you borrowed any more.
       </p>
-      <p>Changed your mind? Turn them back on in your <a th:href="@{/settings}">settings</a>.</p>
+      <p><th:block th:text="#{unsubscribe.done.again}">Changed your mind? Turn them back on in your</th:block>
+        <a th:href="@{/settings}" th:text="#{unsubscribe.settings}">settings</a>.</p>
     </th:block>
     <th:block th:if="${state == 'invalid'}">
-      <h1>This link doesn't work</h1>
+      <h1 th:text="#{unsubscribe.invalid.title}">This link doesn't work</h1>
       <p class="lead">
-        It may have been cut off when it was copied. You can turn emails off in your
-        <a th:href="@{/settings}">settings</a> after logging in.
+        <th:block th:text="#{unsubscribe.invalid.lead}">It may have been cut off when it was copied.</th:block>
+        <a th:href="@{/settings}" th:text="#{unsubscribe.settings}">settings</a>
+        <th:block th:text="#{unsubscribe.invalid.after}">after logging in.</th:block>
       </p>
     </th:block>
   </main>

@@ -1,22 +1,18 @@
 package io.github.gallileee.lendloop.item;
 
 // Stored by name (varchar), so new categories can be added without touching existing rows.
+// The names people see are in messages*.properties under category.<NAME>.
 public enum Category {
-	BOOK("Book"),
-	TOOL("Tool"),
-	GAME("Board game"),
-	OUTDOOR("Outdoor & sport"),
-	ELECTRONICS("Electronics"),
-	KITCHEN("Kitchen"),
-	OTHER("Other");
+	BOOK,
+	TOOL,
+	GAME,
+	OUTDOOR,
+	ELECTRONICS,
+	KITCHEN,
+	OTHER;
 
-	private final String label;
-
-	Category(String label) {
-		this.label = label;
-	}
-
-	public String getLabel() {
-		return label;
+	// For templates: th:text="#{${c.messageCode}}".
+	public String getMessageCode() {
+		return "category." + name();
 	}
 }

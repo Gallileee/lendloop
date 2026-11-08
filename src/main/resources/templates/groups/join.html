@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Join ' + ${group.name})}"></head>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(#{join.pageTitle(${group.name})})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main class="narrow">
-    <h1>Join <span th:text="${group.name}">Flat 4B</span>?</h1>
-    <p class="lead">
+    <h1 th:text="#{join.title(${group.name})}">Join Flat 4B?</h1>
+    <p class="lead" th:text="#{join.lead}">
       You'll see what the members are happy to lend, and they'll see the things you mark as lendable.
     </p>
     <form th:action="@{/join/{token}(token=${token})}" method="post" class="form-actions">
-      <button type="submit" class="button">Join group</button>
-      <a class="button button-secondary" th:href="@{/groups}">Not now</a>
+      <button type="submit" class="button" th:text="#{join.submit}">Join group</button>
+      <a class="button button-secondary" th:href="@{/groups}" th:text="#{join.notNow}">Not now</a>
     </form>
   </main>
   <footer th:replace="~{fragments :: footer}"></footer>

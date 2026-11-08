@@ -1,58 +1,61 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head(${itemId} ? 'Edit item' : 'Add item')}"></head>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${itemId} ? #{itemForm.edit} : #{itemForm.add})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main class="narrow">
-    <h1 th:text="${itemId} ? 'Edit item' : 'Add item'">Add item</h1>
+    <h1 th:text="${itemId} ? #{itemForm.edit} : #{itemForm.add}">Add item</h1>
 
     <!-- Fills the form below from Open Library. A GET form: it only reads, nothing is saved. -->
     <form th:unless="${itemId}" th:action="@{/items/new}" method="get" class="card form lookup" role="search">
       <div class="lookup-field">
-        <label for="isbn-lookup">Adding a book? Look it up by ISBN</label>
+        <label for="isbn-lookup" th:text="#{itemForm.lookup.label}">Adding a book? Look it up by ISBN</label>
         <div class="lookup-row">
           <input id="isbn-lookup" type="text" name="isbn" th:value="${isbnQuery}" maxlength="30"
-                 autocomplete="off" placeholder="e.g. 978-0-14-032872-1" aria-describedby="isbn-lookup-hint"
+                 autocomplete="off" th:placeholder="#{itemForm.lookup.placeholder}" aria-describedby="isbn-lookup-hint"
                  th:attr="aria-invalid=${lookupError != null}">
-          <button type="submit" class="button button-secondary">Look it up</button>
+          <button type="submit" class="button button-secondary" th:text="#{itemForm.lookup.submit}">Look it up</button>
         </div>
-        <span id="isbn-lookup-hint" class="hint">The 10 or 13 digits by the barcode. Details come from Open Library.</span>
+        <span id="isbn-lookup-hint" class="hint" th:text="#{itemForm.lookup.hint}">The 10 or 13 digits by the barcode.</span>
       </div>
-      <p th:if="${lookupFound}" class="notice" role="status" th:text="${lookupFound}">Found it.</p>
-      <p th:if="${lookupError}" class="alert" role="alert" th:text="${lookupError}">Not found.</p>
+      <!-- lookupFound and lookupError hold message codes (see ItemController.lookUp). -->
+      <p th:if="${lookupFound}" class="notice" role="status" th:text="#{${lookupFound}}">Found it.</p>
+      <p th:if="${lookupError}" class="alert" role="alert" th:text="#{${lookupError}}">Not found.</p>
     </form>
 
     <form th:action="${itemId} ? @{/items/{id}(id=${itemId})} : @{/items}" th:object="${form}"
           method="post" class="card form" novalidate>
-      <label>Name
+      <label><th:block th:text="#{itemForm.name}">Name</th:block>
         <input type="text" th:field="*{name}" maxlength="100" required autofocus
                th:attr="aria-invalid=${#fields.hasErrors('name')}">
         <span class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></span>
       </label>
-      <label>Category
+      <label><th:block th:text="#{itemForm.category}">Category</th:block>
         <select th:field="*{category}">
-          <option th:each="c : ${categories}" th:value="${c}" th:text="${c.label}">Book</option>
+          <option th:each="c : ${categories}" th:value="${c}" th:text="#{${c.messageCode}}">Book</option>
         </select>
         <span class="field-error" th:if="${#fields.hasErrors('category')}" th:errors="*{category}"></span>
       </label>
-      <label>Description <span class="muted">(optional)</span>
+      <label><th:block th:text="#{itemForm.description}">Description</th:block>
+        <span class="muted" th:text="#{common.optional}">(optional)</span>
         <textarea th:field="*{description}" rows="3" maxlength="1000"
                   th:attr="aria-invalid=${#fields.hasErrors('description')}"></textarea>
-        <span class="hint">Edition, size, condition, what's in the box.</span>
+        <span class="hint" th:text="#{itemForm.description.hint}">Edition, size, condition, what's in the box.</span>
         <span class="field-error" th:if="${#fields.hasErrors('description')}" th:errors="*{description}"></span>
       </label>
-      <label>ISBN <span class="muted">(optional, for books)</span>
+      <label><th:block th:text="#{itemForm.isbn}">ISBN</th:block>
+        <span class="muted" th:text="#{itemForm.isbn.optional}">(optional, for books)</span>
         <input type="text" th:field="*{isbn}" maxlength="30" autocomplete="off"
                th:attr="aria-invalid=${#fields.hasErrors('isbn')}">
         <span class="field-error" th:if="${#fields.hasErrors('isbn')}" th:errors="*{isbn}"></span>
       </label>
       <label class="checkbox">
         <input type="checkbox" th:field="*{available}">
-        Friends can ask to borrow it
+        <th:block th:text="#{itemForm.available}">Friends can ask to borrow it</th:block>
       </label>
       <div class="form-actions">
-        <button type="submit" class="button" th:text="${itemId} ? 'Save' : 'Add item'">Add item</button>
-        <a class="button button-secondary" th:href="@{/items}">Cancel</a>
+        <button type="submit" class="button" th:text="${itemId} ? #{common.save} : #{itemForm.add}">Add item</button>
+        <a class="button button-secondary" th:href="@{/items}" th:text="#{common.cancel}">Cancel</a>
       </div>
     </form>
   </main>

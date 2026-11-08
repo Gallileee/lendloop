@@ -109,7 +109,7 @@ class LoanFlowTests extends WebTest {
 		// The owner gets a badge and the request with its message.
 		mvc.perform(get("/loans").with(as(alex)))
 			.andExpect(content().string(containsString("waiting for your answer")))
-			.andExpect(content().string(containsString("Sam</span> wants to borrow")))
+			.andExpect(content().string(containsString("Sam wants to borrow Catan")))
 			.andExpect(content().string(containsString("For Friday&#39;s game night")));
 		// The group page now says "Requested" instead of offering the button again.
 		mvc.perform(get("/groups/{id}", flat.getId()).with(as(sam)))

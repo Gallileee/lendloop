@@ -3,11 +3,9 @@ package io.github.gallileee.lendloop.group;
 import io.github.gallileee.lendloop.item.Category;
 import io.github.gallileee.lendloop.loan.LoanService;
 import io.github.gallileee.lendloop.security.AppUserDetails;
+import io.github.gallileee.lendloop.web.Dates;
+import io.github.gallileee.lendloop.web.Messages;
 import jakarta.validation.Valid;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.Locale;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -25,14 +23,16 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @RequestMapping("/groups")
 public class GroupController {
 
-	private static final DateTimeFormatter EXPIRY_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.ENGLISH);
-
 	private final GroupService groupService;
 	private final LoanService loanService;
+	private final Messages messages;
+	private final Dates dates;
 
-	public GroupController(GroupService groupService, LoanService loanService) {
+	public GroupController(GroupService groupService, LoanService loanService, Messages messages, Dates dates) {
 		this.groupService = groupService;
 		this.loanService = loanService;
+		this.messages = messages;
+		this.dates = dates;
 	}
 
 	@GetMapping
@@ -52,7 +52,7 @@ public class GroupController {
 			return "groups/list";
 		}
 		AppGroup group = groupService.create(me.id(), form);
-		redirect.addFlashAttribute("message", "Group created. Send the invite link below to your friends.");
+		redirect.addFlashAttribute("message", messages.text("group.flash.created"));
 		return "redirect:/groups/" + group.getId();
 	}
 
@@ -72,11 +72,8 @@ public class GroupController {
 				.path("/join/{token}")
 				.buildAndExpand(page.group().getInviteToken())
 				.toUriString());
-			// In the server's time zone, and in English like the rest of the UI (formatting with
-			// the browser's locale gave "10 lis 2026" on a Czech browser). Per-user time zones and
-			// languages can come with user settings.
-			model.addAttribute("inviteExpiresOn", EXPIRY_FORMAT.format(
-					LocalDateTime.ofInstant(page.group().getInviteExpiresAt(), ZoneId.systemDefault())));
+			// In the page's language and the server's time zone (until users can choose one).
+			model.addAttribute("inviteExpiresOn", dates.localDateTime(page.group().getInviteExpiresAt()));
 		}
 		return "groups/detail";
 	}
@@ -85,7 +82,7 @@ public class GroupController {
 	String replaceInvite(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id,
 			RedirectAttributes redirect) {
 		groupService.replaceInvite(id, me.id());
-		redirect.addFlashAttribute("message", "New invite link created. The old one no longer works.");
+		redirect.addFlashAttribute("message", messages.text("group.flash.newInvite"));
 		return "redirect:/groups/" + id;
 	}
 
@@ -98,7 +95,7 @@ public class GroupController {
 			return "redirect:/groups/" + id + "#settings";
 		}
 		AppGroup group = groupService.rename(id, me.id(), form);
-		redirect.addFlashAttribute("message", "Group renamed to " + group.getName() + ".");
+		redirect.addFlashAttribute("message", messages.text("group.flash.renamed", group.getName()));
 		return "redirect:/groups/" + id;
 	}
 
@@ -107,11 +104,10 @@ public class GroupController {
 			@PathVariable Long userId, RedirectAttributes redirect) {
 		try {
 			String name = groupService.removeMember(id, me.id(), userId);
-			redirect.addFlashAttribute("message",
-					name + " is no longer in the group. The invite link was replaced, so they can't rejoin with it.");
+			redirect.addFlashAttribute("message", messages.text("group.flash.removed", name));
 		}
 		catch (GroupService.GroupRuleException e) {
-			redirect.addFlashAttribute("error", e.getMessage());
+			redirect.addFlashAttribute("error", messages.text(e));
 		}
 		return "redirect:/groups/" + id;
 	}
@@ -121,10 +117,10 @@ public class GroupController {
 			RedirectAttributes redirect) {
 		try {
 			String name = groupService.handOver(id, me.id(), userId);
-			redirect.addFlashAttribute("message", name + " owns the group now. You're still a member.");
+			redirect.addFlashAttribute("message", messages.text("group.flash.handedOver", name));
 		}
 		catch (GroupService.GroupRuleException e) {
-			redirect.addFlashAttribute("error", e.getMessage());
+			redirect.addFlashAttribute("error", messages.text(e));
 		}
 		return "redirect:/groups/" + id;
 	}
@@ -134,11 +130,11 @@ public class GroupController {
 			@RequestParam(required = false) String confirmName, RedirectAttributes redirect) {
 		try {
 			String name = groupService.delete(id, me.id(), confirmName);
-			redirect.addFlashAttribute("message", name + " was deleted. Everyone's things and loans are kept.");
+			redirect.addFlashAttribute("message", messages.text("group.flash.deleted", name));
 			return "redirect:/groups";
 		}
 		catch (GroupService.GroupRuleException e) {
-			redirect.addFlashAttribute("error", e.getMessage());
+			redirect.addFlashAttribute("error", messages.text(e));
 			return "redirect:/groups/" + id + "#settings";
 		}
 	}
@@ -149,11 +145,10 @@ public class GroupController {
 			groupService.leave(id, me.id());
 		}
 		catch (GroupService.OwnerCannotLeaveException e) {
-			redirect.addFlashAttribute("error",
-					"You own this group, so you can't leave it. Hand it over to another member first, or delete it.");
+			redirect.addFlashAttribute("error", messages.text("group.flash.ownerCannotLeave"));
 			return "redirect:/groups/" + id;
 		}
-		redirect.addFlashAttribute("message", "You left the group.");
+		redirect.addFlashAttribute("message", messages.text("group.flash.left"));
 		return "redirect:/groups";
 	}
 }

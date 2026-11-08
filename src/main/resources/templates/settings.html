@@ -1,106 +1,103 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Settings')}"></head>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(#{settings.title})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main class="narrow">
-    <h1>Settings</h1>
+    <h1 th:text="#{settings.title}">Settings</h1>
 
-    <p th:if="${saved}" class="notice" role="status">Settings saved.</p>
-    <p th:if="${emailVerified}" class="notice" role="status">Email confirmed. Thanks!</p>
-    <p th:if="${passwordChanged}" class="notice" role="status">
+    <p th:if="${saved}" class="notice" role="status" th:text="#{settings.saved}">Settings saved.</p>
+    <p th:if="${emailVerified}" class="notice" role="status" th:text="#{login.emailVerified}">Email confirmed. Thanks!</p>
+    <p th:if="${passwordChanged}" class="notice" role="status" th:text="#{settings.passwordChanged}">
       Password changed. You're still logged in here; everywhere else you'll need the new password.
     </p>
-    <p th:if="${sessionsEnded}" class="notice" role="status">
+    <p th:if="${sessionsEnded}" class="notice" role="status" th:text="#{settings.sessionsEnded}">
       Logged out everywhere else. This browser stays logged in.
     </p>
 
     <form th:action="@{/settings}" th:object="${form}" method="post" class="card form" novalidate>
-      <label>Your name
+      <label><th:block th:text="#{register.name}">Your name</th:block>
         <input type="text" th:field="*{displayName}" maxlength="60" required autocomplete="name"
                th:attr="aria-invalid=${#fields.hasErrors('displayName')}">
-        <span class="hint">Your friends see it in groups and in loan emails.</span>
+        <span class="hint" th:text="#{settings.name.hint}">Your friends see it in groups and in loan emails.</span>
         <span class="field-error" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}"></span>
       </label>
       <fieldset class="settings-group">
-        <legend>Emails</legend>
+        <legend th:text="#{settings.emails}">Emails</legend>
         <label class="checkbox">
           <input type="checkbox" th:field="*{remindBorrowed}">
-          Remind me the day before something I borrowed is due, and when it's overdue
+          <th:block th:text="#{settings.remindBorrowed}">Remind me the day before something I borrowed is due</th:block>
         </label>
         <label class="checkbox">
           <input type="checkbox" th:field="*{notifyLentOverdue}">
-          Tell me when something I lent out is overdue, and remind me about things lent to people
-          who aren't on Lendloop
+          <th:block th:text="#{settings.notifyLent}">Tell me when something I lent out is overdue</th:block>
         </label>
       </fieldset>
       <div class="form-actions">
-        <button type="submit" class="button">Save</button>
+        <button type="submit" class="button" th:text="#{common.save}">Save</button>
       </div>
     </form>
 
     <section>
-      <h2 class="section-title" id="email">Email address</h2>
+      <h2 class="section-title" id="email" th:text="#{settings.email.title}">Email address</h2>
       <div class="card">
         <p><strong th:text="${#authentication.principal.email()}">alex@example.com</strong>
-          <span th:if="${emailUnconfirmed}" class="status status-late">Not confirmed</span>
-          <span th:unless="${emailUnconfirmed}" class="status">Confirmed</span>
+          <span th:if="${emailUnconfirmed}" class="status status-late" th:text="#{settings.email.unconfirmed}">Not confirmed</span>
+          <span th:unless="${emailUnconfirmed}" class="status" th:text="#{settings.email.confirmed}">Confirmed</span>
         </p>
         <th:block th:switch="${verification}">
-          <p th:case="'SENT'" class="notice" role="status">
-            Sent. Check your inbox (and the spam folder) for the newest link; older ones no longer work.
+          <p th:case="'SENT'" class="notice" role="status" th:text="#{settings.email.sent}">Sent.</p>
+          <p th:case="'TOO_MANY'" class="alert" role="alert" th:text="#{settings.email.tooMany}">
+            We've sent several links in the last hour.
           </p>
-          <p th:case="'TOO_MANY'" class="alert" role="alert">
-            We've sent several links in the last hour. Please wait a while before asking again.
-          </p>
-          <p th:case="'MAIL_FAILED'" class="alert" role="alert">
-            We couldn't send the email just now. Please try again later.
+          <p th:case="'MAIL_FAILED'" class="alert" role="alert" th:text="#{settings.email.failed}">
+            We couldn't send the email just now.
           </p>
         </th:block>
         <th:block th:if="${emailUnconfirmed}">
-          <p class="muted">
+          <p class="muted" th:text="#{settings.email.pending}">
             Lendloop doesn't send you reminders until you open the link we emailed you when you signed up.
           </p>
           <form th:action="@{/settings/email/resend}" method="post">
-            <button type="submit" class="button button-secondary">Send the link again</button>
+            <button type="submit" class="button button-secondary" th:text="#{settings.email.resend}">Send the link again</button>
           </form>
         </th:block>
       </div>
     </section>
 
     <section>
-      <h2 class="section-title" id="password">Change password</h2>
+      <h2 class="section-title" id="password" th:text="#{settings.password.title}">Change password</h2>
       <form th:action="@{/settings/password}" th:object="${passwordForm}" method="post" class="card form" novalidate
             aria-labelledby="password">
-        <label>Current password
+        <label><th:block th:text="#{settings.password.current}">Current password</th:block>
           <input type="password" th:field="*{currentPassword}" autocomplete="current-password" required
                  th:attr="aria-invalid=${#fields.hasErrors('currentPassword')}">
           <span class="field-error" th:if="${#fields.hasErrors('currentPassword')}" th:errors="*{currentPassword}"></span>
         </label>
-        <label>New password
+        <label><th:block th:text="#{reset.password}">New password</th:block>
           <input type="password" th:field="*{newPassword}" autocomplete="new-password" minlength="10" required
                  th:attr="aria-invalid=${#fields.hasErrors('newPassword') or #fields.hasErrors('newPasswordShortEnough')}">
-          <span class="hint">At least 10 characters. Other devices are logged out when you change it.</span>
+          <span class="hint" th:text="#{settings.password.hint}">At least 10 characters.</span>
           <span class="field-error" th:if="${#fields.hasErrors('newPassword')}" th:errors="*{newPassword}"></span>
           <span class="field-error" th:if="${#fields.hasErrors('newPasswordShortEnough')}" th:errors="*{newPasswordShortEnough}"></span>
         </label>
-        <label>Repeat new password
+        <label><th:block th:text="#{reset.confirm}">Repeat new password</th:block>
           <input type="password" th:field="*{confirmPassword}" autocomplete="new-password" required
                  th:attr="aria-invalid=${#fields.hasErrors('newPasswordConfirmed')}">
           <span class="field-error" th:if="${#fields.hasErrors('newPasswordConfirmed')}" th:errors="*{newPasswordConfirmed}"></span>
         </label>
         <div class="form-actions">
-          <button type="submit" class="button">Change password</button>
+          <button type="submit" class="button" th:text="#{settings.password.submit}">Change password</button>
         </div>
       </form>
     </section>
 
     <section>
-      <h2 class="section-title">Other devices</h2>
+      <h2 class="section-title" th:text="#{settings.devices.title}">Other devices</h2>
       <div class="card">
-        <p class="muted">Logged in on a shared or lost device? Log out everywhere except in this browser.</p>
+        <p class="muted" th:text="#{settings.devices.text}">Logged in on a shared or lost device?</p>
         <form th:action="@{/settings/sessions}" method="post">
-          <button type="submit" class="button button-secondary">Log out everywhere else</button>
+          <button type="submit" class="button button-secondary" th:text="#{settings.devices.submit}">Log out everywhere else</button>
         </form>
       </div>
     </section>

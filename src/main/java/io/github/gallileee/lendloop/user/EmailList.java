@@ -14,7 +14,13 @@ public enum EmailList {
 		this.description = description;
 	}
 
+	// English, for the footer of the (English) emails.
 	public String getDescription() {
 		return description;
+	}
+
+	// The same description on the pages, in the page's language.
+	public String getMessageCode() {
+		return "emailList." + name();
 	}
 }

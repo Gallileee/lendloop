@@ -109,7 +109,7 @@ class AccountSecurityTests extends WebTest {
 
 		changePassword(laptop, "not my password", NEW_PASSWORD, NEW_PASSWORD)
 			.andExpect(status().isOk())
-			.andExpect(model().attributeHasFieldErrorCode("passwordForm", "currentPassword", "wrong"))
+			.andExpect(model().attributeHasFieldErrorCode("passwordForm", "currentPassword", "settings.password.wrong"))
 			.andExpect(content().string(containsString("That&#39;s not your current password.")))
 			// Typed passwords aren't sent back.
 			.andExpect(content().string(not(containsString(NEW_PASSWORD))));
@@ -128,7 +128,7 @@ class AccountSecurityTests extends WebTest {
 
 		changePassword(laptop, PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
 			.andExpect(status().isOk())
-			.andExpect(model().attributeHasFieldErrorCode("passwordForm", "currentPassword", "blocked"));
+			.andExpect(model().attributeHasFieldErrorCode("passwordForm", "currentPassword", "settings.password.blocked"));
 		mvc.perform(post("/login").with(csrf()).param("email", "kim@example.com").param("password", PASSWORD))
 			.andExpect(redirectedUrl("/login?blocked"));
 	}

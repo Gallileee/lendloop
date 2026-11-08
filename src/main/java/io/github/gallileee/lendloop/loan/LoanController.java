@@ -2,6 +2,7 @@ package io.github.gallileee.lendloop.loan;
 
 import io.github.gallileee.lendloop.security.AppUserDetails;
 import io.github.gallileee.lendloop.web.Dates;
+import io.github.gallileee.lendloop.web.Messages;
 import java.time.LocalDate;
 import java.util.function.Supplier;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -24,10 +25,12 @@ public class LoanController {
 
 	private final LoanService loanService;
 	private final Dates dates;
+	private final Messages messages;
 
-	public LoanController(LoanService loanService, Dates dates) {
+	public LoanController(LoanService loanService, Dates dates, Messages messages) {
 		this.loanService = loanService;
 		this.dates = dates;
+		this.messages = messages;
 	}
 
 	@GetMapping
@@ -43,10 +46,9 @@ public class LoanController {
 			@RequestParam(required = false) String message, @RequestParam(required = false) Long groupId,
 			RedirectAttributes redirect) {
 		String back = groupId == null ? "redirect:/loans" : "redirect:/groups/" + groupId;
-		return run(redirect, back, "You've already asked for this.", () -> {
+		return run(redirect, back, "loan.rule.alreadyAsked", () -> {
 			Loan loan = loanService.request(itemId, me.id(), message);
-			return "Asked " + loan.getItem().getOwner().getDisplayName() + " for “" + loan.getItem().getName()
-					+ "”. You'll see the answer under Loans.";
+			return messages.text("loan.flash.asked", loan.getItem().getOwner().getDisplayName(), loan.getItem().getName());
 		});
 	}
 
@@ -54,11 +56,7 @@ public class LoanController {
 	String approve(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate,
 			RedirectAttributes redirect) {
-		return run(redirect, "redirect:/loans", "It's already lent out. Mark it as returned first.", () -> {
-			Loan loan = loanService.approve(id, me.id(), dueDate);
-			return "Lent “" + loan.getItem().getName() + "” to " + loan.getBorrowerDisplayName()
-					+ " until " + dates.format(loan.getDueDate()) + ".";
-		});
+		return run(redirect, "redirect:/loans", "loan.rule.alreadyLent", () -> lent(loanService.approve(id, me.id(), dueDate)));
 	}
 
 	// From the My things page: the owner lends an item to someone who isn't on Lendloop.
@@ -67,18 +65,15 @@ public class LoanController {
 			@RequestParam(required = false) String borrowerName,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueDate,
 			RedirectAttributes redirect) {
-		return run(redirect, "redirect:/items", "It's already lent out. Mark it as returned first.", () -> {
-			Loan loan = loanService.lendToOutsider(itemId, me.id(), borrowerName, dueDate);
-			return "Lent “" + loan.getItem().getName() + "” to " + loan.getBorrowerDisplayName()
-					+ " until " + dates.format(loan.getDueDate()) + ".";
-		});
+		return run(redirect, "redirect:/items", "loan.rule.alreadyLent",
+				() -> lent(loanService.lendToOutsider(itemId, me.id(), borrowerName, dueDate)));
 	}
 
 	@PostMapping("/{id}/decline")
 	String decline(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id, RedirectAttributes redirect) {
 		return run(redirect, "redirect:/loans", null, () -> {
 			Loan loan = loanService.decline(id, me.id());
-			return "Declined " + loan.getBorrower().getDisplayName() + "’s request.";
+			return messages.text("loan.flash.declined", loan.getBorrower().getDisplayName());
 		});
 	}
 
@@ -86,7 +81,7 @@ public class LoanController {
 	String cancel(@AuthenticationPrincipal AppUserDetails me, @PathVariable Long id, RedirectAttributes redirect) {
 		return run(redirect, "redirect:/loans", null, () -> {
 			Loan loan = loanService.cancel(id, me.id());
-			return "Withdrew your request for “" + loan.getItem().getName() + "”.";
+			return messages.text("loan.flash.withdrew", loan.getItem().getName());
 		});
 	}
 
@@ -95,24 +90,29 @@ public class LoanController {
 			RedirectAttributes redirect) {
 		return run(redirect, "redirect:/loans", null, () -> {
 			Loan loan = loanService.markReturned(id, me.id());
-			return "“" + loan.getItem().getName() + "” is back. Thanks for lending it!";
+			return messages.text("loan.flash.returned", loan.getItem().getName());
 		});
 	}
 
+	private String lent(Loan loan) {
+		return messages.text("loan.flash.lent", loan.getItem().getName(), loan.getBorrowerDisplayName(),
+				dates.local(loan.getDueDate()));
+	}
+
 	// Runs one action and turns its outcome into a flash message. A unique-constraint violation
-	// means another request won a race (see LoanService); it's reported with raceMessage.
-	private static String run(RedirectAttributes redirect, String back, String raceMessage, Supplier<String> action) {
+	// means another request won a race (see LoanService); it's reported with the raceCode text.
+	private String run(RedirectAttributes redirect, String back, String raceCode, Supplier<String> action) {
 		try {
 			redirect.addFlashAttribute("message", action.get());
 		}
 		catch (LoanRuleException e) {
-			redirect.addFlashAttribute("error", e.getMessage());
+			redirect.addFlashAttribute("error", messages.text(e));
 		}
 		catch (DataIntegrityViolationException e) {
-			if (raceMessage == null) {
+			if (raceCode == null) {
 				throw e;
 			}
-			redirect.addFlashAttribute("error", raceMessage);
+			redirect.addFlashAttribute("error", messages.text(raceCode));
 		}
 		return back;
 	}
