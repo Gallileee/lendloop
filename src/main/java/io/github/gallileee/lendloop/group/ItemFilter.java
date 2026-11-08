@@ -2,8 +2,8 @@ package io.github.gallileee.lendloop.group;
 
 import io.github.gallileee.lendloop.book.Isbn;
 import io.github.gallileee.lendloop.item.Category;
+import io.github.gallileee.lendloop.item.SearchText;
 import java.util.Arrays;
-import java.util.Locale;
 import java.util.Optional;
 
 // What someone searches for on a group page: text in the name or description (or an ISBN), a
@@ -46,10 +46,10 @@ public record ItemFilter(String text, Category category, boolean availableNow) {
 		return Isbn.parse(text);
 	}
 
-	// "%text%" for a case-insensitive LIKE, with the user's own % and _ taken literally.
-	// Must be used with ESCAPE_CHAR as the LIKE escape character.
+	// "%text%" for a LIKE on Item.searchText: folded the same way (lower case, no accents), with
+	// the user's own % and _ taken literally. Must be used with ESCAPE_CHAR as the escape character.
 	public String likePattern() {
-		String escaped = text.toLowerCase(Locale.ROOT)
+		String escaped = SearchText.fold(text)
 			.replace(String.valueOf(ESCAPE_CHAR), ESCAPE_CHAR + "" + ESCAPE_CHAR)
 			.replace("%", ESCAPE_CHAR + "%")
 			.replace("_", ESCAPE_CHAR + "_");

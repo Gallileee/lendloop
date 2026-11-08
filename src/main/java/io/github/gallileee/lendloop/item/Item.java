@@ -45,6 +45,13 @@ public class Item {
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
+	// Name and description folded for the search box (see SearchText), kept in step by update().
+	@Column(name = "search_text", nullable = false, length = SEARCH_TEXT_LENGTH)
+	private String searchText;
+
+	// Room for the name and description even if folding doubles every letter ("ß" -> "ss").
+	public static final int SEARCH_TEXT_LENGTH = 2500;
+
 	protected Item() {
 		// for JPA
 	}
@@ -60,6 +67,7 @@ public class Item {
 		this.description = description;
 		this.category = category;
 		this.available = available;
+		this.searchText = SearchText.forItem(name, description);
 	}
 
 	public Long getId() {
@@ -92,6 +100,10 @@ public class Item {
 
 	public void setIsbn(Isbn isbn) {
 		this.isbn = isbn == null ? null : isbn.value();
+	}
+
+	public String getSearchText() {
+		return searchText;
 	}
 
 	public Instant getCreatedAt() {
