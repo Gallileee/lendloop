@@ -6,8 +6,8 @@ import jakarta.validation.constraints.Size;
 // The "new group" form. Mutable with a setter because Spring MVC binds form fields that way.
 public class GroupForm {
 
-	@NotBlank(message = "Give the group a name.")
-	@Size(max = 60, message = "Use at most 60 characters.")
+	@NotBlank(message = "{validation.group.name.required}")
+	@Size(max = 60, message = "{validation.max60}")
 	private String name = "";
 
 	public String getName() {

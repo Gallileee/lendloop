@@ -40,7 +40,7 @@ class PasswordResetController {
 		if (trimmed.isEmpty() || trimmed.length() > 254 || !trimmed.contains("@")) {
 			model.addAttribute("validMinutes", PasswordResetService.LINK_VALIDITY.toMinutes());
 			model.addAttribute("email", trimmed.length() > 254 ? "" : trimmed);
-			model.addAttribute("emailError", "Enter the email address you signed up with.");
+			model.addAttribute("emailError", true);
 			return "forgot-password";
 		}
 		try {

@@ -1,13 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head(${status} == 404 ? 'Not found' : 'Something went wrong')}"></head>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${status} == 404 ? #{error.notFound} : #{error.general})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main class="narrow">
-    <h1 th:text="${status} == 404 ? 'Not found' : 'Something went wrong'">Something went wrong</h1>
-    <p th:if="${status} == 404">That page or item doesn't exist, or it isn't yours.</p>
-    <p th:unless="${status} == 404">Please try again. If it keeps happening, the problem is on our side.</p>
-    <p><a class="button" th:href="@{/items}">Back to my things</a></p>
+    <h1 th:text="${status} == 404 ? #{error.notFound} : #{error.general}">Something went wrong</h1>
+    <p th:if="${status} == 404" th:text="#{error.notFound.text}">That page or item doesn't exist, or it isn't yours.</p>
+    <p th:unless="${status} == 404" th:text="#{error.general.text}">Please try again.</p>
+    <p><a class="button" th:href="@{/items}" th:text="#{error.back}">Back to my things</a></p>
   </main>
+  <footer th:replace="~{fragments :: footer}"></footer>
 </body>
 </html>

@@ -133,7 +133,7 @@ class PasswordResetTests extends WebTest {
 
 		mvc.perform(get("/reset-password").param("token", token))
 			.andExpect(status().isNotFound())
-			.andExpect(content().string(containsString("This link doesn't work any more")));
+			.andExpect(content().string(containsString("This link doesn&#39;t work any more")));
 		reset(token, "a third password 999", "a third password 999").andExpect(status().isNotFound());
 		login(NEW_PASSWORD).andExpect(authenticated());
 	}
@@ -146,7 +146,7 @@ class PasswordResetTests extends WebTest {
 
 		verify(mailer, never()).send(anyString(), anyString(), anyString(), any());
 		mvc.perform(get("/forgot-password/sent"))
-			.andExpect(content().string(containsString("If there's a Lendloop account for")));
+			.andExpect(content().string(containsString("If there&#39;s a Lendloop account for")));
 	}
 
 	@Test

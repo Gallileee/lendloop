@@ -7,8 +7,8 @@ import jakarta.validation.constraints.Size;
 // adds a hidden "_name" field, so Spring then binds it as false.
 public class SettingsForm {
 
-	@NotBlank(message = "Enter the name your friends know you by.")
-	@Size(max = 60, message = "Use at most 60 characters.")
+	@NotBlank(message = "{validation.displayName.required}")
+	@Size(max = 60, message = "{validation.max60}")
 	private String displayName = "";
 
 	private boolean remindBorrowed;

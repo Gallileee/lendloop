@@ -132,7 +132,7 @@ class EmailVerificationTests extends WebTest {
 		confirm(token);
 
 		confirm(token).andExpect(status().isNotFound())
-			.andExpect(content().string(containsString("This link doesn't work any more")));
+			.andExpect(content().string(containsString("This link doesn&#39;t work any more")));
 		mvc.perform(get("/verify-email").param("token", token)).andExpect(status().isNotFound());
 		mvc.perform(get("/verify-email").param("token", "not a token")).andExpect(status().isNotFound());
 		mvc.perform(get("/verify-email")).andExpect(status().isNotFound());

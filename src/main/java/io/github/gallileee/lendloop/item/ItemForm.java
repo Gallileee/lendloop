@@ -8,21 +8,21 @@ import jakarta.validation.constraints.Size;
 // The add / edit item form. Mutable with setters because Spring MVC binds form fields that way.
 public class ItemForm {
 
-	@NotBlank(message = "Give the item a name.")
-	@Size(max = 100, message = "Use at most 100 characters.")
+	@NotBlank(message = "{validation.item.name.required}")
+	@Size(max = 100, message = "{validation.max100}")
 	private String name = "";
 
-	@Size(max = 1000, message = "Use at most 1000 characters.")
+	@Size(max = 1000, message = "{validation.max1000}")
 	private String description = "";
 
-	@NotNull(message = "Pick a category.")
+	@NotNull(message = "{validation.item.category.required}")
 	private Category category = Category.OTHER;
 
 	private boolean available = true;
 
 	// As typed; the service stores it normalised to ISBN-13.
 	@ValidIsbn
-	@Size(max = 30, message = "Use at most 30 characters.")
+	@Size(max = 30, message = "{validation.max30}")
 	private String isbn = "";
 
 	public static ItemForm from(Item item) {

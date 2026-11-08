@@ -1,16 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<head th:replace="~{fragments :: head('Link expired')}"></head>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments :: head(#{reset.invalid.pageTitle})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main class="narrow">
-    <h1>This link doesn't work any more</h1>
-    <p class="lead">
-      Confirmation links work once, for 48 hours, and a newer link turns off the older ones. If you
-      already confirmed your email, there's nothing more to do.
-    </p>
-    <p sec:authorize="isAuthenticated()"><a class="button" th:href="@{/settings#email}">Get a new link in Settings</a></p>
-    <p sec:authorize="!isAuthenticated()"><a class="button" th:href="@{/login}">Log in to get a new link</a></p>
+    <h1 th:text="#{reset.invalid.title}">This link doesn't work any more</h1>
+    <p class="lead" th:text="#{verify.invalid.lead}">Confirmation links work once, for 48 hours.</p>
+    <p sec:authorize="isAuthenticated()"><a class="button" th:href="@{/settings#email}" th:text="#{verify.invalid.settings}">Get a new link in Settings</a></p>
+    <p sec:authorize="!isAuthenticated()"><a class="button" th:href="@{/login}" th:text="#{verify.invalid.login}">Log in to get a new link</a></p>
   </main>
+  <footer th:replace="~{fragments :: footer}"></footer>
 </body>
 </html>

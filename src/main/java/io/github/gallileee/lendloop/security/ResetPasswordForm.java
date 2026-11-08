@@ -9,17 +9,17 @@ public class ResetPasswordForm {
 
 	private String token = "";
 
-	@Size(min = 10, message = "Use at least 10 characters.")
+	@Size(min = 10, message = "{validation.password.min}")
 	private String password = "";
 
 	private String confirmPassword = "";
 
-	@AssertTrue(message = "That password is too long (at most 72 bytes, about 70 characters).")
+	@AssertTrue(message = "{validation.password.tooLong}")
 	public boolean isPasswordShortEnough() {
 		return password.getBytes(StandardCharsets.UTF_8).length <= 72;
 	}
 
-	@AssertTrue(message = "The passwords don't match.")
+	@AssertTrue(message = "{validation.passwords.mismatch}")
 	public boolean isPasswordConfirmed() {
 		return password.equals(confirmPassword);
 	}

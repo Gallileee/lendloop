@@ -1,17 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Confirm your email')}"></head>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(#{verify.title})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main class="narrow">
-    <h1>Confirm your email</h1>
-    <p class="lead">
+    <h1 th:text="#{verify.title}">Confirm your email</h1>
+    <p class="lead" th:text="#{verify.lead}">
       One click and Lendloop can send you reminders about the things you borrow and lend.
     </p>
     <form th:action="@{/verify-email}" method="post" class="card form">
       <input type="hidden" name="token" th:value="${token}">
-      <button type="submit" class="button">Confirm my email</button>
+      <button type="submit" class="button" th:text="#{verify.submit}">Confirm my email</button>
     </form>
   </main>
+  <footer th:replace="~{fragments :: footer}"></footer>
 </body>
 </html>
