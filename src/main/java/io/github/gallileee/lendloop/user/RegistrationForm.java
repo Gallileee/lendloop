@@ -9,29 +9,29 @@ import java.nio.charset.StandardCharsets;
 // What the sign-up page posts. Mutable with setters because Spring MVC binds form fields that way.
 public class RegistrationForm {
 
-	@NotBlank(message = "Enter your email.")
-	@Email(message = "Enter a valid email address.")
-	@Size(max = 254, message = "That email is too long.")
+	@NotBlank(message = "{validation.email.required}")
+	@Email(message = "{validation.email.invalid}")
+	@Size(max = 254, message = "{validation.email.tooLong}")
 	private String email = "";
 
-	@NotBlank(message = "Enter the name your friends know you by.")
-	@Size(max = 60, message = "Use at most 60 characters.")
+	@NotBlank(message = "{validation.displayName.required}")
+	@Size(max = 60, message = "{validation.max60}")
 	private String displayName = "";
 
 	// 10+ characters, no composition rules (NIST SP 800-63B).
-	@Size(min = 10, message = "Use at least 10 characters.")
+	@Size(min = 10, message = "{validation.password.min}")
 	private String password = "";
 
 	private String confirmPassword = "";
 
 	// BCrypt only reads the first 72 bytes, and Spring Security rejects longer input.
 	// Counted in UTF-8 bytes, because characters like "ř" take two.
-	@AssertTrue(message = "That password is too long (at most 72 bytes, about 70 characters).")
+	@AssertTrue(message = "{validation.password.tooLong}")
 	public boolean isPasswordShortEnough() {
 		return password.getBytes(StandardCharsets.UTF_8).length <= 72;
 	}
 
-	@AssertTrue(message = "The passwords don't match.")
+	@AssertTrue(message = "{validation.passwords.mismatch}")
 	public boolean isPasswordConfirmed() {
 		return password.equals(confirmPassword);
 	}

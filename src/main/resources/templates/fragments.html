@@ -11,35 +11,45 @@
   <th:block th:fragment="topbar">
   <header class="topbar">
     <a class="brand" th:href="@{/items}">LendLoop</a>
-    <nav sec:authorize="isAuthenticated()" class="topbar-links" aria-label="Main">
-      <a th:href="@{/items}" th:attr="aria-current=${section == 'items'} ? 'page' : null">My things</a>
-      <a th:href="@{/groups}" th:attr="aria-current=${section == 'groups'} ? 'page' : null">Groups</a>
-      <a th:href="@{/loans}" th:attr="aria-current=${section == 'loans'} ? 'page' : null">Loans<span
+    <nav sec:authorize="isAuthenticated()" class="topbar-links" th:aria-label="#{nav.main}">
+      <a th:href="@{/items}" th:attr="aria-current=${section == 'items'} ? 'page' : null" th:text="#{nav.myThings}">My things</a>
+      <a th:href="@{/groups}" th:attr="aria-current=${section == 'groups'} ? 'page' : null" th:text="#{nav.groups}">Groups</a>
+      <a th:href="@{/loans}" th:attr="aria-current=${section == 'loans'} ? 'page' : null"><th:block th:text="#{nav.loans}">Loans</th:block><span
          th:if="${openRequests != null and openRequests > 0}" class="badge"
-         th:attr="aria-label=${openRequests} + ' waiting for your answer'"
+         th:attr="aria-label=#{nav.waiting(${openRequests})}"
          th:text="${openRequests}">2</span></a>
     </nav>
-    <nav sec:authorize="isAuthenticated()" class="topbar-nav" aria-label="Account">
+    <nav sec:authorize="isAuthenticated()" class="topbar-nav" th:aria-label="#{nav.account}">
       <a th:href="@{/settings}" th:attr="aria-current=${section == 'settings'} ? 'page' : null"
-         th:title="'Settings for ' + ${#authentication.principal.displayName()}"
+         th:title="#{nav.settingsFor(${#authentication.principal.displayName()})}"
          th:text="${#authentication.principal.displayName()}">Alex</a>
       <form th:action="@{/logout}" method="post">
-        <button type="submit" class="link-button">Log out</button>
+        <button type="submit" class="link-button" th:text="#{nav.logout}">Log out</button>
       </form>
     </nav>
   </header>
   <p th:if="${emailUnconfirmed}" class="banner" role="status">
-    Confirm your email address to get loan reminders: open the link we emailed you.
-    <a th:href="@{/settings#email}">Didn't get it?</a>
+    <th:block th:text="#{banner.confirmEmail}">Confirm your email address to get loan reminders: open the link we emailed you.</th:block>
+    <a th:href="@{/settings#email}" th:text="#{banner.confirmEmail.link}">Didn't get it?</a>
   </p>
   </th:block>
+
+  <!-- The language switcher. "?lang=" keeps the current page (but not its search filters). -->
+  <footer th:fragment="footer" class="footer">
+    <nav th:aria-label="#{footer.language}">
+      <a href="?lang=en" hreflang="en" lang="en"
+         th:attr="aria-current=${#locale.language == 'en'} ? 'true' : null">English</a>
+      <a href="?lang=cs" hreflang="cs" lang="cs"
+         th:attr="aria-current=${#locale.language == 'cs'} ? 'true' : null">Čeština</a>
+    </nav>
+  </footer>
 
   <!-- A loan's due date, with an "overdue" warning in words, not only in colour. -->
   <th:block th:fragment="due(loan, today)">
     <span th:if="${loan.isOverdueOn(today)}" class="status status-late"
-          th:text="'Overdue since ' + ${@dates.format(loan.dueDate)}">Overdue since 1 Nov 2026</span>
+          th:text="#{loan.overdueSince(${@dates.local(loan.dueDate)})}">Overdue since 1 Nov 2026</span>
     <span th:unless="${loan.isOverdueOn(today)}" class="status"
-          th:text="'Due ' + ${@dates.format(loan.dueDate)}">Due 17 Nov 2026</span>
+          th:text="#{loan.due(${@dates.local(loan.dueDate)})}">Due 17 Nov 2026</span>
   </th:block>
 </body>
 </html>

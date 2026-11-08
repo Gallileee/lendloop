@@ -1,5 +1,31 @@
 # Progress log
 
+## 2026-11-08: Milestone 3m, Czech translation (part 1: language switching and account pages)
+
+Why: next steps 1 and 2. The owner and the first users are Czech, and the app was English only.
+
+Browser check of 3l first (next step 1), on `lendloop-memory-demo` at 375 px with two accounts seeded through curl: the *Manage* menu opens inside the page (no horizontal scroll, `scrollWidth` 375), and renaming the group works through the form. Nothing to fix.
+
+Done:
+- **`web.LanguageResolver`** (replaces Spring Boot's `localeResolver` bean): the `lendloop-lang` cookie if it holds a supported language, otherwise the best match from `Accept-Language` (`Locale.lookup`), otherwise English. Only English and Czech ever come out, so a hand-made cookie or header can't put another language into `<html lang>`. The cookie is HttpOnly, SameSite=Lax, one year.
+- **`web.LanguageConfig`**: an interceptor that switches on `?lang=cs` / `?lang=en`. A GET is fine: it only changes how this browser's pages look. Unknown values are ignored.
+- **`messages.properties` / `messages_cs.properties`**: the texts of the top bar, the email banner, the due-date badge, a new footer with the *English / Čeština* switcher (on every page), log in, sign up, forgotten password (+ sent), new password (+ expired link), email confirmation (+ expired link) and the error page.
+- **Form errors**: every Bean Validation message is now a key (`{validation.max60}`), resolved by Spring Boot's MessageSource interpolator, plus the "email already registered" and "enter the email you signed up with" errors.
+- **`Dates.local(date)`**: "17 Nov 2026" or "17. 11. 2026" by page language; `format()` stays English for flash messages and emails, and outside a request (the reminder job) `local()` is English too.
+- Tests: `LanguageTests` (8), `LanguageResolverTest` (3), `MessagesConsistencyTest` (2). Four older assertions now expect `&#39;` because the texts come through `th:text`, which escapes apostrophes. 247 in total.
+
+Found by the tests: with `Accept-Language` missing, the pages came out **Czech**, because this machine's JVM locale is `cs_CZ` and Spring's MessageSource falls back to the system locale when there's no `messages_en`. `spring.messages.fallback-to-system-locale=false` fixes it, but it has to be in `src/test/resources/application.properties` too: that file replaces the main one in tests rather than adding to it. A server with a Czech default locale would have shown Czech to English browsers.
+
+Verified locally:
+- `./mvnw test`: 247 run, 0 failures, 5 skipped (PostgreSQL, no Docker; CI runs them).
+- The fallback bug above was a real failing run (the tests went red on this machine before the fix).
+- In the browser (`lendloop-memory-demo`, 375 px): the browser pane sends Czech, so `/login` came up Czech by itself. *English* switched it and the cookie kept English on `/register` despite the Czech browser. `?lang=cs` and an empty sign-up showed the Czech field errors. The Czech "Check your email" page reads correctly (the leading space in `forgot.sent.after` is escaped as `\ `). No horizontal overflow.
+
+Trade-offs:
+- `?lang=` drops the page's other query parameters (a group search), to keep the footer a plain link.
+- Untranslated pages keep `<html lang="en">` while their top bar may be Czech, until they're translated too.
+- Flash messages are built in Java as English strings; they need message codes (and the emails a locale per user) before they can be translated.
+
 ## 2026-11-07: Milestone 3l, group management
 
 Why: next step 1. A group couldn't be renamed or deleted, the owner couldn't remove anyone (e.g. a flatmate who moved out), and the owner could never leave because nobody could take over.
@@ -481,8 +507,8 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Browser check of the group management controls (see 2026-11-07), especially the *Manage* menu at 375 px.
-2. Czech translation (`messages_cs.properties`). Then search could also ignore accents (e.g. a normalised search column).
+1. Czech translation, part 2: My things, Groups, Loans and Settings pages, item categories (`Category.label` as message keys) and the flash messages (message codes instead of English strings in the controllers).
+2. Czech emails: store each user's language (a column set from the page language at sign-up and on Settings) so the reminder job writes in it. Then search could also ignore accents (e.g. a normalised search column).
 3. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
 4. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
 5. Delete accounts that stay unconfirmed for a few weeks; let users change their email (confirming the new one first).

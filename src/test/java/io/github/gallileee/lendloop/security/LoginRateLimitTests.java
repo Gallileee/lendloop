@@ -63,7 +63,7 @@ class LoginRateLimitTests extends WebTest {
 		mvc.perform(get("/login").param("blocked", ""))
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("Too many failed attempts")))
-			.andExpect(content().string(containsString("<span>15</span> minutes")));
+			.andExpect(content().string(containsString("paused for up to 15 minutes")));
 	}
 
 	@Test

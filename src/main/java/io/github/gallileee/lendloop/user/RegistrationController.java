@@ -41,7 +41,7 @@ public class RegistrationController {
 			user = registrationService.register(form);
 		}
 		catch (EmailAlreadyRegisteredException e) {
-			result.rejectValue("email", "duplicate", "An account with this email already exists.");
+			result.rejectValue("email", "register.email.taken");
 			return "register";
 		}
 		try {

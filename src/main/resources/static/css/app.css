@@ -339,3 +339,13 @@ a.status { text-decoration: none; }
   border-bottom: 1px solid var(--border);
   text-align: center;
 }
+
+/* Language switcher at the bottom of every page. */
+.footer {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px 32px;
+  font-size: 0.9rem;
+}
+.footer nav { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.footer a[aria-current] { color: var(--text); text-decoration: none; font-weight: 600; }
