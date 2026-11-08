@@ -1,5 +1,6 @@
 package io.github.gallileee.lendloop.user;
 
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,9 @@ public class SettingsService {
 	public AppUser save(Long userId, SettingsForm form) {
 		AppUser user = load(userId);
 		user.changeSettings(form.getDisplayName().trim(), form.isRemindBorrowed(), form.isNotifyLentOverdue());
+		if (form.getEmailLanguage() != null) {
+			user.changeLanguage(Locale.forLanguageTag(form.getEmailLanguage()));
+		}
 		return user;
 	}
 

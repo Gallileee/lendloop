@@ -6,7 +6,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import io.github.gallileee.lendloop.web.LanguageResolver;
 import java.time.Instant;
+import java.util.Locale;
 
 @Entity
 @Table(name = "app_user")
@@ -44,6 +46,10 @@ public class AppUser {
 	@Column(name = "email_verified_at")
 	private Instant emailVerifiedAt;
 
+	// See V11__preferred_language.sql: the language of this user's emails, "en" or "cs".
+	@Column(name = "preferred_language", nullable = false, length = 8)
+	private String preferredLanguage = LanguageResolver.ENGLISH.getLanguage();
+
 	protected AppUser() {
 		// for JPA
 	}
@@ -53,6 +59,20 @@ public class AppUser {
 		this.displayName = displayName;
 		this.passwordHash = passwordHash;
 		this.createdAt = Instant.now();
+	}
+
+	// Only a supported language is stored; anything else keeps the current one.
+	public void changeLanguage(Locale locale) {
+		Locale supported = locale == null ? null : LanguageResolver.supported(locale.getLanguage());
+		if (supported != null) {
+			this.preferredLanguage = supported.getLanguage();
+		}
+	}
+
+	// The language to write this user's emails in.
+	public Locale getLocale() {
+		Locale supported = LanguageResolver.supported(preferredLanguage);
+		return supported != null ? supported : LanguageResolver.ENGLISH;
 	}
 
 	public void changeSettings(String displayName, boolean remindBorrowed, boolean notifyLentOverdue) {

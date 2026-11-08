@@ -11,7 +11,8 @@ import org.springframework.context.i18n.LocaleContext;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
-// Dates for the pages and emails. format() is always English (emails are English for now). local() follows the page language: "17 Nov 2026" or "17. 11. 2026".
+// Dates for the pages and emails: "17 Nov 2026" or "17. 11. 2026". local() follows the page
+// language; emails pass the recipient's language to format(date, locale).
 // Thymeleaf's #temporals isn't used because it follows any browser locale, not only the
 // languages the pages exist in. "Today" is in the server's time zone until users can choose.
 @Component("dates")
@@ -33,7 +34,15 @@ public class Dates {
 	}
 
 	public String format(LocalDate date) {
-		return date == null ? "" : DAY.format(date);
+		return format(date, Locale.ENGLISH);
+	}
+
+	// In a given language, e.g. the recipient's in an email.
+	public String format(LocalDate date, Locale locale) {
+		if (date == null) {
+			return "";
+		}
+		return LanguageResolver.CZECH.equals(locale) ? DAY_CS.format(date) : DAY.format(date);
 	}
 
 	// In the current request's language; English outside a request (scheduled jobs).

@@ -1,6 +1,7 @@
 package io.github.gallileee.lendloop.user;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 // What the Settings page posts. An unticked checkbox is not sent at all; Thymeleaf's th:field
@@ -15,11 +16,17 @@ public class SettingsForm {
 
 	private boolean notifyLentOverdue;
 
+	// The language of the emails: one of LanguageResolver.SUPPORTED. Left out (null), the
+	// stored language stays as it is.
+	@Pattern(regexp = "en|cs", message = "{validation.language}")
+	private String emailLanguage;
+
 	static SettingsForm of(AppUser user) {
 		SettingsForm form = new SettingsForm();
 		form.setDisplayName(user.getDisplayName());
 		form.setRemindBorrowed(user.isRemindBorrowed());
 		form.setNotifyLentOverdue(user.isNotifyLentOverdue());
+		form.setEmailLanguage(user.getLocale().getLanguage());
 		return form;
 	}
 
@@ -45,5 +52,13 @@ public class SettingsForm {
 
 	public void setNotifyLentOverdue(boolean notifyLentOverdue) {
 		this.notifyLentOverdue = notifyLentOverdue;
+	}
+
+	public String getEmailLanguage() {
+		return emailLanguage;
+	}
+
+	public void setEmailLanguage(String emailLanguage) {
+		this.emailLanguage = emailLanguage;
 	}
 }

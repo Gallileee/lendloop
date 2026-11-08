@@ -17,6 +17,7 @@ import io.github.gallileee.lendloop.item.Item;
 import io.github.gallileee.lendloop.item.ItemRepository;
 import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.AppUserRepository;
+import io.github.gallileee.lendloop.web.LanguageResolver;
 import jakarta.mail.Message.RecipientType;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Session;
@@ -393,5 +394,62 @@ class LoanReminderTests extends WebTest {
 		stubMimeMessages();
 		assertThat(job.sendReminders(tomorrowDay)).isOne();
 		assertThat(onlyMail().getSubject()).isEqualTo("“Dune” is due back from Grandma tomorrow");
+	}
+
+	private void speaksCzech(AppUser user) {
+		AppUser saved = users.findById(user.getId()).orElseThrow();
+		saved.changeLanguage(LanguageResolver.CZECH);
+		users.save(saved);
+	}
+
+	@Test
+	void aCzechBorrowerGetsTheReminderInCzech() {
+		speaksCzech(sam);
+
+		job.sendReminders(DUE.minusDays(1));
+		Sent mail = onlyMail();
+		assertThat(mail.getSubject()).isEqualTo("Zítra máte vrátit „Catan“");
+		assertThat(mail.getText())
+			.startsWith("Dobrý den, Sam,")
+			.contains("Zítra, 17. 11. 2026, máte vrátit „Catan“. Půjčuje vám to Alex.")
+			.contains("Vaše půjčky: https://lendloop.test/loans")
+			.contains("protože máte zapnuté: připomínky k věcem, které jste si půjčili.")
+			.contains("Všechna nastavení e-mailů: https://lendloop.test/settings");
+	}
+
+	// Each person reads their own language: Sam Czech, Alex (who never changed it) English.
+	@Test
+	void anOverdueLoanIsWrittenInEachRecipientsLanguage() {
+		speaksCzech(sam);
+
+		assertThat(job.sendReminders(DUE.plusDays(1))).isEqualTo(2);
+		List<Sent> mails = allMail(2);
+		assertThat(mails.get(0).getSubject()).isEqualTo("„Catan“ jste měli vrátit 17. 11. 2026");
+		assertThat(mails.get(0).getText()).contains("„Catan“ jste měli vrátit 17. 11. 2026 (před 1 dnem).");
+		assertThat(mails.get(1).getSubject()).isEqualTo("“Catan” is overdue at Sam");
+		assertThat(mails.get(1).getText()).startsWith("Hi Alex,").contains("(1 day ago)");
+
+		assertThat(job.sendReminders(DUE.plusDays(8))).isOne();
+		assertThat(onlyMail().getText()).contains("(před 8 dny)");
+	}
+
+	@Test
+	void aCzechOwnerGetsTheOutsideLoanRemindersInCzech() {
+		Loan dune = duneLentToGrandma();
+		speaksCzech(alex);
+
+		job.sendReminders(dune.getDueDate().minusDays(1));
+		Sent tomorrow = onlyMail();
+		assertThat(tomorrow.getSubject()).isEqualTo("Zítra se vám má vrátit „Dune“ (má to Grandma)");
+		assertThat(tomorrow.getText())
+			.startsWith("Dobrý den, Alex,")
+			.contains("„Dune“ má Grandma a vrátit to má zítra, 12. 11. 2026. Grandma není na Lendloopu")
+			.contains("protože máte zapnuté: upozornění na věci, které jste půjčili.");
+
+		job.sendReminders(dune.getDueDate().plusDays(1));
+		Sent late = onlyMail();
+		assertThat(late.getSubject()).isEqualTo("„Dune“ je po termínu (má to Grandma)");
+		assertThat(late.getText()).contains("termín vrácení byl 12. 11. 2026 (před 1 dnem)")
+			.contains("přijde vám jednou týdně");
 	}
 }

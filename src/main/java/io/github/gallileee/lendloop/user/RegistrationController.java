@@ -2,6 +2,7 @@ package io.github.gallileee.lendloop.user;
 
 import io.github.gallileee.lendloop.security.EmailVerificationService;
 import jakarta.validation.Valid;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailException;
@@ -32,13 +33,13 @@ public class RegistrationController {
 
 	@PostMapping("/register")
 	String register(@Valid @ModelAttribute("form") RegistrationForm form, BindingResult result,
-			RedirectAttributes redirect) {
+			Locale language, RedirectAttributes redirect) {
 		if (result.hasErrors()) {
 			return "register";
 		}
 		AppUser user;
 		try {
-			user = registrationService.register(form);
+			user = registrationService.register(form, language);
 		}
 		catch (EmailAlreadyRegisteredException e) {
 			result.rejectValue("email", "register.email.taken");

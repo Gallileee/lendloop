@@ -4,9 +4,11 @@ import io.github.gallileee.lendloop.mail.Mailer;
 import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.AppUserRepository;
 import io.github.gallileee.lendloop.user.RegistrationService;
+import io.github.gallileee.lendloop.web.Messages;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,18 +37,20 @@ public class PasswordResetService {
 	private final AppUserRepository users;
 	private final PasswordEncoder passwordEncoder;
 	private final Mailer mailer;
+	private final Messages messages;
 	private final LoginThrottle loginThrottle;
 	private final Clock clock;
 	private final AttemptLimiter requestLimits;
 	private final String baseUrl;
 
 	public PasswordResetService(PasswordResetTokenRepository tokens, AppUserRepository users,
-			PasswordEncoder passwordEncoder, Mailer mailer, LoginThrottle loginThrottle, Clock clock,
+			PasswordEncoder passwordEncoder, Mailer mailer, Messages messages, LoginThrottle loginThrottle, Clock clock,
 			@Value("${lendloop.base-url}") String baseUrl) {
 		this.tokens = tokens;
 		this.users = users;
 		this.passwordEncoder = passwordEncoder;
 		this.mailer = mailer;
+		this.messages = messages;
 		this.loginThrottle = loginThrottle;
 		this.clock = clock;
 		this.requestLimits = new AttemptLimiter(3, 10, Duration.ofHours(1), clock);
@@ -72,7 +76,7 @@ public class PasswordResetService {
 		tokens.deleteAllForUser(user.get().getId());
 		String token = OneTimeTokens.newToken();
 		tokens.save(new PasswordResetToken(user.get(), OneTimeTokens.hash(token), now.plus(LINK_VALIDITY), now));
-		mailer.send(user.get().getEmail(), "Reset your Lendloop password", text(user.get(), token), null);
+		mailer.send(user.get().getEmail(), messages.in(user.get().getLocale(), "mail.reset.subject"), text(user.get(), token), null);
 	}
 
 	// Whether the reset page should show the form for this token.
@@ -120,10 +124,9 @@ public class PasswordResetService {
 			.queryParam("token", token)
 			.build()
 			.toUriString();
-		return "Hi " + Mailer.singleLine(user.getDisplayName()) + ",\n\n"
-				+ "Someone, hopefully you, asked to reset the password of your Lendloop account. "
-				+ "Choose a new password here:\n\n" + link + "\n\n"
-				+ "The link works once, for " + LINK_VALIDITY.toMinutes() + " minutes. If you didn't ask for "
-				+ "this, ignore this email: your password stays as it is.\n\nLendloop\n";
+		Locale lang = user.getLocale();
+		return messages.in(lang, "mail.greeting", Mailer.singleLine(user.getDisplayName())) + "\n\n"
+				+ messages.in(lang, "mail.reset.body", link, LINK_VALIDITY.toMinutes()) + "\n\n" + messages.in(lang, "mail.signature")
+				+ "\n";
 	}
 }

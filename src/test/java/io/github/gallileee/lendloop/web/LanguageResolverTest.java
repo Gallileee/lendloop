@@ -41,6 +41,7 @@ class LanguageResolverTest {
 		assertThat(dates.local(day)).isEqualTo("17 Nov 2026");
 		LocaleContextHolder.setLocale(LanguageResolver.CZECH);
 		assertThat(dates.local(day)).isEqualTo("17. 11. 2026");
-		assertThat(dates.format(day)).as("emails and flash messages stay English").isEqualTo("17 Nov 2026");
+		assertThat(dates.format(day)).as("not the page language").isEqualTo("17 Nov 2026");
+		assertThat(dates.format(day, LanguageResolver.CZECH)).as("an email's own language").isEqualTo("17. 11. 2026");
 	}
 }
