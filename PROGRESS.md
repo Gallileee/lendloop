@@ -1,5 +1,16 @@
 # Progress log
 
+## 2026-11-08: CI, actions pinned to commit SHAs
+
+Why: [workflow-guard](https://github.com/Gallileee/workflow-guard) flagged `actions/checkout@v4` and `actions/setup-java@v4` (WG001): a tag can be moved to other code, a commit SHA can't. It also flagged the token left in `.git/config` (WG006).
+
+Done:
+- `workflow-guard --fix` pinned both actions to the commit their `v4` tag points to, keeping `# v4` in a comment. Only those two lines changed.
+- `persist-credentials: false` on checkout: the job only builds and tests, nothing pushes.
+- New `.github/dependabot.yml` (GitHub Actions only, monthly): Dependabot reads the `# v4` comment and updates SHA and comment together, so the pins don't go stale.
+
+Verified: `workflow-guard` reports 0 findings; CI runs on the PR.
+
 ## 2026-11-08: Milestone 3m, Czech translation (part 1: language switching and account pages)
 
 Why: next steps 1 and 2. The owner and the first users are Czech, and the app was English only.
