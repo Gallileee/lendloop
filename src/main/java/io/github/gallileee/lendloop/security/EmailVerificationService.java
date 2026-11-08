@@ -3,9 +3,11 @@ package io.github.gallileee.lendloop.security;
 import io.github.gallileee.lendloop.mail.Mailer;
 import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.AppUserRepository;
+import io.github.gallileee.lendloop.web.Messages;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,15 +41,17 @@ public class EmailVerificationService {
 	private final EmailVerificationTokenRepository tokens;
 	private final AppUserRepository users;
 	private final Mailer mailer;
+	private final Messages messages;
 	private final Clock clock;
 	private final AttemptLimiter resendLimits;
 	private final String baseUrl;
 
 	public EmailVerificationService(EmailVerificationTokenRepository tokens, AppUserRepository users, Mailer mailer,
-			Clock clock, @Value("${lendloop.base-url}") String baseUrl) {
+			Messages messages, Clock clock, @Value("${lendloop.base-url}") String baseUrl) {
 		this.tokens = tokens;
 		this.users = users;
 		this.mailer = mailer;
+		this.messages = messages;
 		this.clock = clock;
 		this.resendLimits = new AttemptLimiter(3, 10, Duration.ofHours(1), clock);
 		this.baseUrl = baseUrl.replaceAll("/+$", "");
@@ -114,7 +118,7 @@ public class EmailVerificationService {
 		tokens.deleteAllForUser(user.getId());
 		String token = OneTimeTokens.newToken();
 		tokens.save(new EmailVerificationToken(user, OneTimeTokens.hash(token), now.plus(LINK_VALIDITY), now));
-		mailer.send(user.getEmail(), "Confirm your email for Lendloop", text(user, token), null);
+		mailer.send(user.getEmail(), messages.in(user.getLocale(), "mail.verify.subject"), text(user, token), null);
 	}
 
 	private Optional<EmailVerificationToken> find(String token) {
@@ -130,10 +134,9 @@ public class EmailVerificationService {
 			.queryParam("token", token)
 			.build()
 			.toUriString();
-		return "Hi " + Mailer.singleLine(user.getDisplayName()) + ",\n\n"
-				+ "Welcome to Lendloop! Please confirm that this is your email address:\n\n" + link + "\n\n"
-				+ "Until you do, Lendloop won't send you reminders about loans. The link works for "
-				+ LINK_VALIDITY.toHours() + " hours. If you didn't sign up, ignore this email: without "
-				+ "the confirmation, nothing more is sent to this address.\n\nLendloop\n";
+		Locale lang = user.getLocale();
+		return messages.in(lang, "mail.greeting", Mailer.singleLine(user.getDisplayName())) + "\n\n"
+				+ messages.in(lang, "mail.verify.body", link, LINK_VALIDITY.toHours()) + "\n\n" + messages.in(lang, "mail.signature")
+				+ "\n";
 	}
 }

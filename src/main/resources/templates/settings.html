@@ -32,6 +32,13 @@
           <input type="checkbox" th:field="*{notifyLentOverdue}">
           <th:block th:text="#{settings.notifyLent}">Tell me when something I lent out is overdue</th:block>
         </label>
+        <label><th:block th:text="#{settings.emailLanguage}">Language of the emails</th:block>
+          <select th:field="*{emailLanguage}">
+            <option value="en" lang="en">English</option>
+            <option value="cs" lang="cs">Čeština</option>
+          </select>
+          <span class="field-error" th:if="${#fields.hasErrors('emailLanguage')}" th:errors="*{emailLanguage}"></span>
+        </label>
       </fieldset>
       <div class="form-actions">
         <button type="submit" class="button" th:text="#{common.save}">Save</button>

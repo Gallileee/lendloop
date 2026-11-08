@@ -1,5 +1,31 @@
 # Progress log
 
+## 2026-11-08: Milestone 3o, emails in each user's language
+
+Why: next step 1. After 3n every page was Czech, but every email (reminders, notices, confirmation, password reset) was still English, so a Czech user got an English email about a Czech page.
+
+Done:
+- Flyway `V11__preferred_language.sql`: `app_user.preferred_language` (`'en'` by default, so existing accounts keep English).
+- `AppUser.changeLanguage(Locale)` stores only a supported language; `getLocale()` falls back to English for anything unexpected in the column.
+- **Where it's set:** at sign-up from the page language (`RegistrationController` takes the request's `Locale`), and on Settings with a new *Language of the emails* select (`@Pattern("en|cs")`; left out, the stored language stays).
+- **Email texts moved to `messages*.properties`** (`mail.*` keys), written through `Messages.in(locale, code, args)`:
+  - `ReminderMailer`: every email in its recipient's language, the item's quotation marks part of the text ("“Catan”" / "„Catan“"), the footer's list name from `emailList.*`, "1 day ago" / "před 1 dnem" / "před 8 dny" with a MessageFormat `choice`.
+  - `PasswordResetService` and `EmailVerificationService`: subject and body in the account's language. The reset email follows the account, not the page it was asked from, since whoever asks may not own the account.
+  - `Dates.format(date, locale)` for the dates in emails.
+- `EmailList.description` (English only) is gone; the pages and emails both use `emailList.*`.
+- English texts are unchanged word for word, so all the old email assertions pass as they were.
+- Tests: `EmailLanguageTests` (5) and three Czech cases in `LoanReminderTests`. 264 in total.
+
+Verified locally:
+- `./mvnw test`: 264 run, 0 failures, 5 skipped (PostgreSQL, no Docker; CI runs them, including V11).
+- Mutation check: with `ReminderMailer` forced to English, the three new Czech tests in `LoanReminderTests` fail. Restored afterwards.
+
+Not verified: the Settings select in the browser (starting `lendloop-memory-demo` was declined in this scheduled run) and delivery through a real SMTP server.
+
+Trade-offs:
+- Czech greetings keep the name in the nominative ("Dobrý den, Sam,"), as on the pages: a typed name can't be put into the vocative reliably. The Czech texts are phrased so no other name needs a case either ("Půjčuje vám to Alex", "má to Grandma").
+- Switching the page language with the footer links doesn't change the email language; that's a separate, explicit choice in Settings, so trying out the other language doesn't change your emails.
+
 ## 2026-11-08: Milestone 3n, Czech translation (part 2: all remaining pages and the flash messages)
 
 Why: next step 1. After part 1 a Czech user still got an English *My things*, group page, *Loans* and *Settings*, and every message after an action was English, so most pages mixed both languages.
@@ -548,8 +574,8 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Czech emails: store each user's language (a column set from the page language at sign-up and on Settings) so the reminder job, the password reset and the confirmation email write in it. The `RuleException`/`Messages` pattern from 3n can be reused with an explicit locale.
-2. Search that ignores accents ("vrtacka" finds "Vrtačka"), e.g. a normalised search column filled on save.
-3. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
-4. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
-5. Delete accounts that stay unconfirmed for a few weeks; let users change their email (confirming the new one first).
+1. Search that ignores accents ("vrtacka" finds "Vrtačka"), e.g. a normalised search column filled on save.
+2. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
+3. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
+4. Delete accounts that stay unconfirmed for a few weeks; let users change their email (confirming the new one first).
+5. Browser check of the Settings *Language of the emails* select (not done in 3o).

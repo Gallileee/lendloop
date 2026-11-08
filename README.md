@@ -8,7 +8,7 @@ People keep asking online for an app that tracks what they own, what they want a
 
 ## Status
 
-**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, search on the group page, group management, and English/Czech pages (see [Roadmap](#roadmap)).
+**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, search on the group page, group management, and English/Czech pages and emails (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -80,7 +80,8 @@ People keep asking online for an app that tracks what they own, what they want a
   - The `Loan` entity refuses every other change.
   - The database checks that a loan names exactly one borrower (an app user *or* a typed name), and that only app users have open requests.
   - The database also guarantees one active loan per item and one open request per person and item, even when two requests race.
-- **English and Czech**: the language follows the browser (`Accept-Language`), and the *English / Čeština* links at the bottom of every page switch it and remember the choice in a cookie. Every page is translated, including item categories, form errors, dates ("17. 11. 2026") and the messages shown after an action ("„Catan“ je půjčené: Sam, vrátit do 22. 11. 2026."). The texts live in `messages.properties` and `messages_cs.properties`; controllers and services only use message codes. The emails are still English.
+- **English and Czech**: the language follows the browser (`Accept-Language`), and the *English / Čeština* links at the bottom of every page switch it and remember the choice in a cookie. Every page is translated, including item categories, form errors, dates ("17. 11. 2026") and the messages shown after an action ("„Catan“ je půjčené: Sam, vrátit do 22. 11. 2026."). The texts live in `messages.properties` and `messages_cs.properties`; controllers and services only use message codes.
+  - **Emails in each user's language.** Every account stores a language (`preferred_language`): the page language at sign-up, then whatever *Language of the emails* says in Settings. The reminders, the owner's notices, the confirmation and the password reset email are written in it, with dates to match ("Zítra, 17. 11. 2026, máte vrátit „Catan“."). Each recipient gets their own language, so a Czech borrower and an English owner of the same loan each read theirs. A reset email follows the account, not the page it was asked for from. Accounts from before keep English.
 - Server-rendered pages that work without JavaScript (JavaScript only adds a confirmation before deleting), in light and dark mode, and usable on a phone.
 
 ## Tech stack
@@ -156,6 +157,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `AccountSecurityTests`: with real login sessions as "devices": a password change logs out the others but keeps this one (with a new session id), wrong current passwords change nothing and count like failed logins, the password rules, log out everywhere else, a reset logging out every device, a deleted account's session ending, a name change keeping the session, and login + CSRF on both forms.
 - `LoginThrottleTest`: the sliding window with a test clock (no Spring): when the pause starts and ends, case-insensitive emails, one IP and many accounts, success clears the email but not the IP, the longer of two waits, purging old entries, and very long emails.
 - `LoginRateLimitTests`: the limits over HTTP: the 5th wrong password pauses the email (even the right password, from any IP), unknown emails are paused the same way, a success forgets typos, one IP guessing at 30 accounts is paused, the login page explains the pause, and a missing CSRF token is still rejected first and not counted.
+- `EmailLanguageTests`: sign-up on a Czech page stores Czech and sends a Czech confirmation (an English page, English), Settings shows and changes the email language (and keeps it when the field is missing), an unsupported language is refused, and a password reset email follows the account's language. `LoanReminderTests` checks Czech reminders, both languages for one overdue loan, "před 1 dnem" / "před 8 dny", and the owner's Czech reminders for outside loans.
 - `SettingsTests`: the Settings page needs a login, shows both emails on for a new account, saves the name and unticked boxes, refreshes the name in the session, and refuses a blank name.
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `ItemFilterTest`: turning query parameters into a filter (trimming, cutting, unknown categories ignored) and escaping `%`, `_` and `\` for LIKE (no Spring).
@@ -214,7 +216,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done); ~~group management: rename, remove members, hand over, delete~~ (done); ~~Czech translation of all pages~~ (done); Czech emails next.
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done); ~~group management: rename, remove members, hand over, delete~~ (done); ~~Czech translation of all pages~~ (done); ~~Czech emails~~ (done); accent-insensitive search next.
 4. Later: photos, installable PWA, iCal feed of due dates, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).
