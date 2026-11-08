@@ -54,7 +54,7 @@ class UnsubscribeTests extends WebTest {
 	void theConfirmButtonTurnsOffOnlyThatList() throws Exception {
 		mvc.perform(post(link(EmailList.BORROWED)))
 			.andExpect(status().isOk())
-			.andExpect(content().string(containsString("You're unsubscribed")));
+			.andExpect(content().string(containsString("You&#39;re unsubscribed")));
 
 		assertThat(reloaded().isRemindBorrowed()).isFalse();
 		assertThat(reloaded().isNotifyLentOverdue()).isTrue();
@@ -82,7 +82,7 @@ class UnsubscribeTests extends WebTest {
 
 		mvc.perform(get(forged))
 			.andExpect(status().isNotFound())
-			.andExpect(content().string(containsString("This link doesn't work")));
+			.andExpect(content().string(containsString("This link doesn&#39;t work")));
 		mvc.perform(post(forged)).andExpect(status().isNotFound());
 		mvc.perform(post("/unsubscribe")).andExpect(status().isNotFound());
 
@@ -96,7 +96,7 @@ class UnsubscribeTests extends WebTest {
 
 		mvc.perform(post(url))
 			.andExpect(status().isNotFound())
-			.andExpect(content().string(containsString("This link doesn't work")));
+			.andExpect(content().string(containsString("This link doesn&#39;t work")));
 	}
 
 	@Test

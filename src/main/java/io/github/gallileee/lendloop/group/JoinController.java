@@ -1,6 +1,7 @@
 package io.github.gallileee.lendloop.group;
 
 import io.github.gallileee.lendloop.security.AppUserDetails;
+import io.github.gallileee.lendloop.web.Messages;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,9 +19,11 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class JoinController {
 
 	private final GroupService groupService;
+	private final Messages messages;
 
-	public JoinController(GroupService groupService) {
+	public JoinController(GroupService groupService, Messages messages) {
 		this.groupService = groupService;
+		this.messages = messages;
 	}
 
 	@GetMapping("/join/{token}")
@@ -41,7 +44,7 @@ public class JoinController {
 			RedirectAttributes redirect) {
 		try {
 			return groupService.join(token, me.id()).map(group -> {
-				redirect.addFlashAttribute("message", "Welcome to " + group.getName() + ".");
+				redirect.addFlashAttribute("message", messages.text("group.flash.welcome", group.getName()));
 				return "redirect:/groups/" + group.getId();
 			}).orElseGet(() -> invalid(response));
 		}

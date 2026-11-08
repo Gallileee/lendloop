@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('My things')}"></head>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(#{nav.myThings})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main>
     <div class="page-header">
-      <h1>My things</h1>
-      <a class="button" th:href="@{/items/new}">Add item</a>
+      <h1 th:text="#{nav.myThings}">My things</h1>
+      <a class="button" th:href="@{/items/new}" th:text="#{items.add}">Add item</a>
     </div>
 
     <p th:if="${message}" class="notice" role="status" th:text="${message}">Added.</p>
     <p th:if="${error}" class="alert" role="alert" th:text="${error}">It's lent out right now.</p>
 
     <section th:if="${#lists.isEmpty(items)}" class="card empty">
-      <h2>Nothing here yet</h2>
-      <p>Add the things you'd lend to friends: books, tools, board games, a tent.</p>
-      <a class="button" th:href="@{/items/new}">Add your first item</a>
+      <h2 th:text="#{items.empty.title}">Nothing here yet</h2>
+      <p th:text="#{items.empty.text}">Add the things you'd lend to friends: books, tools, board games, a tent.</p>
+      <a class="button" th:href="@{/items/new}" th:text="#{items.empty.add}">Add your first item</a>
     </section>
 
     <ul th:unless="${#lists.isEmpty(items)}" class="item-list">
@@ -23,11 +23,11 @@
         <div class="item-main">
           <h2 class="item-name" th:text="${item.name}">Catan</h2>
           <p class="item-meta">
-            <span class="tag" th:text="${item.category.label}">Board game</span>
-            <span th:if="${item.available}" class="status status-on">Can be lent</span>
-            <span th:unless="${item.available}" class="status status-off">Not lending</span>
+            <span class="tag" th:text="#{${item.category.messageCode}}">Board game</span>
+            <span th:if="${item.available}" class="status status-on" th:text="#{items.lendable}">Can be lent</span>
+            <span th:unless="${item.available}" class="status status-off" th:text="#{items.notLending}">Not lending</span>
             <th:block th:if="${loans.isOnLoan(item.id)}" th:with="loan=${loans.activeLoan(item.id)}">
-              <span class="status" th:text="'Lent to ' + ${loan.borrowerDisplayName}">Lent to Sam</span>
+              <span class="status" th:text="#{common.lentTo(${loan.borrowerDisplayName})}">Lent to Sam</span>
               <span th:replace="~{fragments :: due(${loan}, ${today})}"></span>
             </th:block>
           </p>
@@ -37,26 +37,28 @@
         <div class="item-actions">
           <!-- For lending in person to someone who isn't on Lendloop; app users ask from a group. -->
           <details th:unless="${loans.isOnLoan(item.id)}" class="ask">
-            <summary class="button button-secondary" th:attr="aria-label='Lend ' + ${item.name}">Lend</summary>
+            <summary class="button button-secondary" th:attr="aria-label=#{items.lend.label(${item.name})}"
+                     th:text="#{items.lend}">Lend</summary>
             <form th:action="@{/loans/outside}" method="post" class="form ask-form">
               <input type="hidden" name="itemId" th:value="${item.id}">
-              <label>To whom <span class="muted">(someone not on Lendloop)</span>
+              <label><th:block th:text="#{items.lend.to}">To whom</th:block>
+                <span class="muted" th:text="#{items.lend.to.hint}">(someone not on Lendloop)</span>
                 <input type="text" name="borrowerName" required maxlength="60" autocomplete="off"
-                       list="outsider-names" placeholder="e.g. Grandma, Petr from work">
+                       list="outsider-names" th:placeholder="#{items.lend.to.placeholder}">
               </label>
-              <label>Return by
+              <label><th:block th:text="#{common.dueDate}">Return by</th:block>
                 <input type="date" name="dueDate" required th:value="${dueDates.suggested}"
                        th:attr="min=${dueDates.min},max=${dueDates.max}">
               </label>
-              <button type="submit" class="button">Lend it</button>
+              <button type="submit" class="button" th:text="#{common.lendIt}">Lend it</button>
             </form>
           </details>
           <a class="button button-secondary" th:href="@{/items/{id}/edit(id=${item.id})}"
-             th:attr="aria-label='Edit ' + ${item.name}">Edit</a>
+             th:attr="aria-label=#{items.edit.label(${item.name})}" th:text="#{items.edit}">Edit</a>
           <form th:action="@{/items/{id}/delete(id=${item.id})}" method="post"
-                th:attr="data-confirm='Delete ' + ${item.name} + '?'">
+                th:attr="data-confirm=#{items.delete.confirm(${item.name})}">
             <button type="submit" class="button button-danger"
-                    th:attr="aria-label='Delete ' + ${item.name}">Delete</button>
+                    th:attr="aria-label=#{items.delete.label(${item.name})}" th:text="#{items.delete}">Delete</button>
           </form>
         </div>
       </li>

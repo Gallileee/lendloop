@@ -86,27 +86,27 @@ public class LoanService {
 	public Loan request(Long itemId, Long borrowerId, String message) {
 		// The owner is fetched with the item: the controller names them after the transaction ends.
 		Item item = items.findWithOwnerById(itemId)
-			.orElseThrow(() -> new LoanRuleException("That item doesn't exist."));
+			.orElseThrow(() -> new LoanRuleException("loan.rule.noSuchItem"));
 		Long ownerId = item.getOwner().getId();
 		if (ownerId.equals(borrowerId)) {
-			throw new LoanRuleException("That's your own item.");
+			throw new LoanRuleException("loan.rule.ownItem");
 		}
 		if (!members.shareAGroup(borrowerId, ownerId)) {
 			// Same answer as a missing item: don't reveal things outside the user's groups.
-			throw new LoanRuleException("That item doesn't exist.");
+			throw new LoanRuleException("loan.rule.noSuchItem");
 		}
 		if (!item.isAvailable()) {
-			throw new LoanRuleException("The owner isn't lending this at the moment.");
+			throw new LoanRuleException("loan.rule.notLending");
 		}
 		if (loans.existsByItemIdAndStatus(itemId, LoanStatus.ACTIVE)) {
-			throw new LoanRuleException("Someone else has it right now. Try again once it's back.");
+			throw new LoanRuleException("loan.rule.someoneHasIt");
 		}
 		if (loans.existsByItemIdAndBorrowerIdAndStatus(itemId, borrowerId, LoanStatus.REQUESTED)) {
-			throw new LoanRuleException("You've already asked for this.");
+			throw new LoanRuleException("loan.rule.alreadyAsked");
 		}
 		String note = message == null || message.isBlank() ? null : message.trim();
 		if (note != null && note.length() > 300) {
-			throw new LoanRuleException("Keep the message under 300 characters.");
+			throw new LoanRuleException("loan.rule.messageTooLong", 300);
 		}
 		return loans.saveAndFlush(new Loan(item, users.getReferenceById(borrowerId), note, clock.instant()));
 	}
@@ -116,7 +116,7 @@ public class LoanService {
 		Loan loan = asOwner(loanId, ownerId);
 		requireValidDueDate(dueDate);
 		if (loans.existsByItemIdAndStatus(loan.getItem().getId(), LoanStatus.ACTIVE)) {
-			throw new LoanRuleException("It's already lent out. Mark it as returned first.");
+			throw new LoanRuleException("loan.rule.alreadyLent");
 		}
 		loan.approve(dueDate, clock.instant());
 		loans.flush();
@@ -132,14 +132,14 @@ public class LoanService {
 		// Line breaks and tabs become single spaces: the name ends up in email subjects too.
 		String name = borrowerName == null ? "" : borrowerName.replaceAll("[\\s\\p{Cntrl}]+", " ").strip();
 		if (name.isEmpty()) {
-			throw new LoanRuleException("Write who you're lending it to.");
+			throw new LoanRuleException("loan.rule.nameRequired");
 		}
 		if (name.length() > MAX_NAME_LENGTH) {
-			throw new LoanRuleException("Keep the name under " + MAX_NAME_LENGTH + " characters.");
+			throw new LoanRuleException("loan.rule.nameTooLong", MAX_NAME_LENGTH);
 		}
 		requireValidDueDate(dueDate);
 		if (loans.existsByItemIdAndStatus(itemId, LoanStatus.ACTIVE)) {
-			throw new LoanRuleException("It's already lent out. Mark it as returned first.");
+			throw new LoanRuleException("loan.rule.alreadyLent");
 		}
 		// "grandma" after an earlier "Grandma" is the same person: keep the spelling already used.
 		String known = loans.findOutsiderNamesOf(ownerId).stream()
@@ -219,7 +219,7 @@ public class LoanService {
 	private void requireValidDueDate(LocalDate dueDate) {
 		LocalDate today = dates.today();
 		if (dueDate == null || dueDate.isBefore(today) || dueDate.isAfter(today.plusDays(MAX_LOAN_DAYS))) {
-			throw new LoanRuleException("Pick a return date between today and a year from now.");
+			throw new LoanRuleException("loan.rule.dueDate");
 		}
 	}
 

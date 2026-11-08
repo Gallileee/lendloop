@@ -40,9 +40,8 @@ class AccountSecurityController {
 					redirect.addFlashAttribute("passwordChanged", true);
 					return "redirect:/settings";
 				}
-				case WRONG_PASSWORD -> result.rejectValue("currentPassword", "wrong", "That's not your current password.");
-				case TOO_MANY_ATTEMPTS -> result.rejectValue("currentPassword", "blocked",
-						"Too many wrong passwords. Wait a few minutes and try again.");
+				case WRONG_PASSWORD -> result.rejectValue("currentPassword", "settings.password.wrong");
+				case TOO_MANY_ATTEMPTS -> result.rejectValue("currentPassword", "settings.password.blocked");
 			}
 		}
 		// Passwords are never sent back to the browser.

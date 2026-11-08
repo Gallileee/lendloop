@@ -1,10 +1,12 @@
 package io.github.gallileee.lendloop.loan;
 
-// A request the rules don't allow, e.g. approving a loan that was already cancelled.
-// The message is written for the user and shown on the page.
-public class LoanRuleException extends RuntimeException {
+import io.github.gallileee.lendloop.web.RuleException;
 
-	public LoanRuleException(String userMessage) {
-		super(userMessage);
+// A request the rules don't allow, e.g. approving a loan that was already cancelled.
+// It carries a message code (see RuleException), shown to the user as a flash error.
+public class LoanRuleException extends RuleException {
+
+	public LoanRuleException(String code, Object... args) {
+		super(code, args);
 	}
 }

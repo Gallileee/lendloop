@@ -1,5 +1,35 @@
 # Progress log
 
+## 2026-11-08: Milestone 3n, Czech translation (part 2: all remaining pages and the flash messages)
+
+Why: next step 1. After part 1 a Czech user still got an English *My things*, group page, *Loans* and *Settings*, and every message after an action was English, so most pages mixed both languages.
+
+Done:
+- **Message codes instead of sentences in Java.**
+  - `web.RuleException` (implements Spring's `MessageSourceResolvable`): a code plus arguments. `LoanRuleException` and `GroupService.GroupRuleException` extend it, so `LoanService`, `Loan` and `GroupService` throw `loan.rule.alreadyAsked` instead of an English sentence. `getMessage()` is the code, for logs.
+  - `web.Messages`: resolves a code (or a `RuleException`) in the request's language. Controllers build the flash message with it when the action runs; that request comes from the same browser as the next page, so the language matches.
+  - The ISBN lookup puts codes in the model (`#{${lookupError}}` in the template); the wrong-current-password errors are `rejectValue` codes; `@ValidIsbn` uses `{validation.isbn}`.
+- **Enums**: `Category.label` is gone; `Category.messageCode` (`category.GAME`) and `EmailList.messageCode` point at the texts. Loan statuses in the history use `loan.status.<NAME>`.
+- **Templates**: My things, the item form, Groups, a group's page (including the confirm dialogs, the copy button's "Copied" and the invite's expiry), joining and the invalid-invite page, Loans, Settings and Unsubscribe. Every page sets `<html lang>` from the page language.
+- **`Dates.localDateTime`**: the invite expiry as "10 Nov 2026, 14:30" or "10. 11. 2026 14:30". The fixed English formatter in `GroupController` is gone. Loan flash messages now use `Dates.local` too.
+- **Czech names aren't declined.** A name typed by a user can't be put into the right case automatically, so the Czech texts put names where the nominative works: "Žádost odmítnuta (Sam).", "půjčuje Sam", "Skupinu teď vlastní Sam".
+- Tests: `CzechPagesTests` (7) and two new checks in `MessagesConsistencyTest` (every category, loan status and email list has both texts; every page template sets `th:lang`). Eight older assertions changed: `&#39;` for apostrophes that now go through `th:text`, "Sam wants to borrow Catan" without the `<span>`s, and the field-error codes. 256 in total.
+
+Verified locally:
+- `./mvnw test`: 256 run, 0 failures, 5 skipped (PostgreSQL, no Docker; CI runs them).
+- Mutation check: with `Messages` forced to English, the two flash-message tests in `CzechPagesTests` fail. Restored afterwards.
+- In the browser (`lendloop-memory-demo`, 375 px, two accounts seeded with curl, logged in as the owner through the Czech login form):
+  - *Moje věci* with Czech categories ("Desková hra", "Nářadí", "Kniha").
+  - On *Půjčky*, "Jana si chce půjčit Catan"; *Půjčit* gave the flash "„Catan“ je půjčené: Jana, vrátit do 22. 11. 2026."
+  - On the group page: the invite expiry "15. 11. 2026 17:27"; a search for "Vrtačka" typed into the form found 1 of 3 ("1 z 3"); the *Spravovat* menu fits the screen (`scrollWidth` 375).
+  - On *Nastavení*, a wrong current password gave "Toto není vaše současné heslo."
+  - No server errors in the log.
+
+Trade-offs:
+- Flash messages are resolved when the action runs, not when the next page renders. Simpler (a plain string in the session), and the language only differs if someone switches it between the two requests.
+- Emails stay English until each user's language is stored (next step).
+- Texts split around a link (`group.things.none` + link + `group.things.none.after`) keep the links in the template, at the cost of a few half-sentence keys.
+
 ## 2026-11-08: CI, actions pinned to commit SHAs
 
 Why: [workflow-guard](https://github.com/Gallileee/workflow-guard) flagged `actions/checkout@v4` and `actions/setup-java@v4` (WG001): a tag can be moved to other code, a commit SHA can't. It also flagged the token left in `.git/config` (WG006).
@@ -518,8 +548,8 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Czech translation, part 2: My things, Groups, Loans and Settings pages, item categories (`Category.label` as message keys) and the flash messages (message codes instead of English strings in the controllers).
-2. Czech emails: store each user's language (a column set from the page language at sign-up and on Settings) so the reminder job writes in it. Then search could also ignore accents (e.g. a normalised search column).
+1. Czech emails: store each user's language (a column set from the page language at sign-up and on Settings) so the reminder job, the password reset and the confirmation email write in it. The `RuleException`/`Messages` pattern from 3n can be reused with an explicit locale.
+2. Search that ignores accents ("vrtacka" finds "Vrtačka"), e.g. a normalised search column filled on save.
 3. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
 4. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
 5. Delete accounts that stay unconfirmed for a few weeks; let users change their email (confirming the new one first).

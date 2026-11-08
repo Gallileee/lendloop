@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments :: head('Groups')}"></head>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(#{nav.groups})}"></head>
 <body>
   <header th:replace="~{fragments :: topbar}"></header>
   <main>
-    <h1>Groups</h1>
-    <p class="lead">Friends, flatmates or a club. Everyone in a group sees what the others are happy to lend.</p>
+    <h1 th:text="#{nav.groups}">Groups</h1>
+    <p class="lead" th:text="#{groups.lead}">Friends, flatmates or a club.</p>
 
     <p th:if="${message}" class="notice" role="status" th:text="${message}">You left the group.</p>
 
@@ -13,23 +13,23 @@
       <li th:each="m : ${memberships}">
         <a class="card group-link" th:href="@{/groups/{id}(id=${m.group.id})}">
           <span class="group-name" th:text="${m.group.name}">Flat 4B</span>
-          <span th:if="${m.owner}" class="tag">Owner</span>
+          <span th:if="${m.owner}" class="tag" th:text="#{common.owner}">Owner</span>
         </a>
       </li>
     </ul>
 
     <section class="card">
-      <h2 th:text="${#lists.isEmpty(memberships)} ? 'Start your first group' : 'New group'">New group</h2>
-      <p th:if="${#lists.isEmpty(memberships)}" class="muted">
-        You'll get an invite link to send to your friends. Got a link from someone? Just open it.
+      <h2 th:text="${#lists.isEmpty(memberships)} ? #{groups.new.first} : #{groups.new}">New group</h2>
+      <p th:if="${#lists.isEmpty(memberships)}" class="muted" th:text="#{groups.new.hint}">
+        You'll get an invite link to send to your friends.
       </p>
       <form th:action="@{/groups}" th:object="${form}" method="post" class="form form-inline" novalidate>
-        <label>Group name
-          <input type="text" th:field="*{name}" maxlength="60" required placeholder="e.g. Flat 4B"
+        <label><th:block th:text="#{groups.name}">Group name</th:block>
+          <input type="text" th:field="*{name}" maxlength="60" required th:placeholder="#{groups.name.placeholder}"
                  th:attr="aria-invalid=${#fields.hasErrors('name')}">
           <span class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></span>
         </label>
-        <button type="submit" class="button">Create group</button>
+        <button type="submit" class="button" th:text="#{groups.create}">Create group</button>
       </form>
     </section>
   </main>

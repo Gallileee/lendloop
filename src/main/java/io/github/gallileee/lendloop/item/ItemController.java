@@ -6,6 +6,7 @@ import io.github.gallileee.lendloop.book.Isbn;
 import io.github.gallileee.lendloop.loan.LoanService;
 import io.github.gallileee.lendloop.security.AppUserDetails;
 import io.github.gallileee.lendloop.web.Dates;
+import io.github.gallileee.lendloop.web.Messages;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Optional;
@@ -38,12 +39,15 @@ public class ItemController {
 	private final LoanService loanService;
 	private final BookLookup bookLookup;
 	private final Dates dates;
+	private final Messages messages;
 
-	public ItemController(ItemService itemService, LoanService loanService, BookLookup bookLookup, Dates dates) {
+	public ItemController(ItemService itemService, LoanService loanService, BookLookup bookLookup, Dates dates,
+			Messages messages) {
 		this.itemService = itemService;
 		this.loanService = loanService;
 		this.bookLookup = bookLookup;
 		this.dates = dates;
+		this.messages = messages;
 	}
 
 	@ModelAttribute("categories")
@@ -78,14 +82,14 @@ public class ItemController {
 
 	private void lookUp(String typed, ItemForm form, Model model) {
 		if (typed.length() > MAX_ISBN_INPUT) {
-			model.addAttribute("lookupError", "That isn't a valid ISBN. It's the 10 or 13 digits by the barcode.");
+			model.addAttribute("lookupError", "item.lookup.invalid");
 			return;
 		}
 		// Shown in the box again, so a typo can be fixed.
 		model.addAttribute("isbnQuery", typed);
 		Optional<Isbn> isbn = Isbn.parse(typed);
 		if (isbn.isEmpty()) {
-			model.addAttribute("lookupError", "That isn't a valid ISBN. It's the 10 or 13 digits by the barcode.");
+			model.addAttribute("lookupError", "item.lookup.invalid");
 			return;
 		}
 		form.setCategory(Category.BOOK);
@@ -94,13 +98,13 @@ public class ItemController {
 			bookLookup.find(isbn.get()).ifPresentOrElse(book -> {
 				form.setName(book.itemName());
 				form.setDescription(book.itemDescription());
-				model.addAttribute("lookupFound", "Found it on Open Library. Check the details and add it.");
+				model.addAttribute("lookupFound", "item.lookup.found");
 			}, () -> model.addAttribute("lookupError",
-					"Open Library doesn't know that ISBN. Fill in the rest by hand."));
+					"item.lookup.notFound"));
 		}
 		catch (BookLookupUnavailableException e) {
 			log.warn("{}: {}", e.getMessage(), String.valueOf(e.getCause()));
-			model.addAttribute("lookupError", "Open Library didn't answer. Try again later, or fill it in by hand.");
+			model.addAttribute("lookupError", "item.lookup.unavailable");
 		}
 	}
 
@@ -111,7 +115,7 @@ public class ItemController {
 			return "items/form";
 		}
 		Item item = itemService.create(me.id(), form);
-		redirect.addFlashAttribute("message", "Added “" + item.getName() + "”.");
+		redirect.addFlashAttribute("message", messages.text("item.flash.added", item.getName()));
 		return "redirect:/items";
 	}
 
@@ -131,7 +135,7 @@ public class ItemController {
 			return "items/form";
 		}
 		Item item = itemService.update(id, me.id(), form);
-		redirect.addFlashAttribute("message", "Saved “" + item.getName() + "”.");
+		redirect.addFlashAttribute("message", messages.text("item.flash.saved", item.getName()));
 		return "redirect:/items";
 	}
 
@@ -141,10 +145,10 @@ public class ItemController {
 			itemService.delete(id, me.id());
 		}
 		catch (ItemService.ItemLentOutException e) {
-			redirect.addFlashAttribute("error", "It's lent out right now. Mark it as returned under Loans first.");
+			redirect.addFlashAttribute("error", messages.text("item.flash.lentOut"));
 			return "redirect:/items";
 		}
-		redirect.addFlashAttribute("message", "Item deleted.");
+		redirect.addFlashAttribute("message", messages.text("item.flash.deleted"));
 		return "redirect:/items";
 	}
 }

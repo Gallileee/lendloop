@@ -4,6 +4,7 @@ import io.github.gallileee.lendloop.group.GroupMember.Role;
 import io.github.gallileee.lendloop.item.Item;
 import io.github.gallileee.lendloop.item.ItemRepository;
 import io.github.gallileee.lendloop.user.AppUserRepository;
+import io.github.gallileee.lendloop.web.RuleException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -101,7 +102,7 @@ public class GroupService {
 	public String removeMember(Long groupId, Long ownerId, Long memberUserId) {
 		GroupMember owner = ownership(groupId, ownerId);
 		if (ownerId.equals(memberUserId)) {
-			throw new GroupRuleException("You can't remove yourself. Hand the group over first, or delete it.");
+			throw new GroupRuleException("group.rule.removeSelf");
 		}
 		GroupMember member = otherMember(groupId, memberUserId);
 		String name = member.getUser().getDisplayName();
@@ -117,7 +118,7 @@ public class GroupService {
 	public String handOver(Long groupId, Long ownerId, Long newOwnerUserId) {
 		GroupMember owner = ownership(groupId, ownerId);
 		if (ownerId.equals(newOwnerUserId)) {
-			throw new GroupRuleException("You already own this group.");
+			throw new GroupRuleException("group.rule.alreadyOwner");
 		}
 		GroupMember next = otherMember(groupId, newOwnerUserId);
 		owner.becomeMember();
@@ -132,7 +133,7 @@ public class GroupService {
 	public String delete(Long groupId, Long ownerId, String typedName) {
 		AppGroup group = ownership(groupId, ownerId).getGroup();
 		if (typedName == null || !typedName.trim().equals(group.getName())) {
-			throw new GroupRuleException("Type the group's name exactly to delete it.");
+			throw new GroupRuleException("group.rule.confirmName");
 		}
 		String name = group.getName();
 		members.deleteByGroupId(groupId);
@@ -203,11 +204,11 @@ public class GroupService {
 		}
 	}
 
-	// A request the owner may make, but not in this state; the message is shown to them as it is.
-	public static class GroupRuleException extends RuntimeException {
+	// A request the owner may make, but not in this state; shown to them as a flash error.
+	public static class GroupRuleException extends RuleException {
 
-		GroupRuleException(String message) {
-			super(message);
+		GroupRuleException(String code) {
+			super(code);
 		}
 	}
 }

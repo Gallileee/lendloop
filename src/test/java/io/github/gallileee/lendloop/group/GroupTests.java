@@ -108,7 +108,7 @@ class GroupTests extends WebTest {
 		// Opening the link (or a chat app's link preview fetching it) doesn't join yet.
 		mvc.perform(get("/join/{token}", group.getInviteToken()).with(as(sam)))
 			.andExpect(status().isOk())
-			.andExpect(content().string(containsString("Join <span>Climbing club</span>?")));
+			.andExpect(content().string(containsString("Join Climbing club?")));
 		assertThat(groupService.isMember(group.getId(), sam.getId())).isFalse();
 
 		mvc.perform(post("/join/{token}", group.getInviteToken()).with(as(sam)).with(csrf()))
@@ -132,7 +132,7 @@ class GroupTests extends WebTest {
 		for (String token : new String[] {"expired-token", "no-such-token"}) {
 			mvc.perform(get("/join/{token}", token).with(as(kim)))
 				.andExpect(status().isNotFound())
-				.andExpect(content().string(containsString("This invite link doesn't work")));
+				.andExpect(content().string(containsString("This invite link doesn&#39;t work")));
 			mvc.perform(post("/join/{token}", token).with(as(kim)).with(csrf()))
 				.andExpect(status().isNotFound());
 		}
