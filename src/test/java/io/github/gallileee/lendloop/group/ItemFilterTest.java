@@ -47,10 +47,11 @@ class ItemFilterTest {
 	@ParameterizedTest
 	@CsvSource(delimiter = '|', value = {
 			"Dune        | %dune%",
+			"Vrtačka     | %vrtacka%",
 			"100%        | %100\\%%",
 			"snake_case  | %snake\\_case%",
 			"back\\slash | %back\\\\slash%" })
-	void likePatternIsLowerCaseAndEscapesWildcards(String text, String pattern) {
+	void likePatternIsFoldedAndEscapesWildcards(String text, String pattern) {
 		assertThat(new ItemFilter(text, null, false).likePattern()).isEqualTo(pattern);
 	}
 

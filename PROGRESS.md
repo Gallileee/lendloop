@@ -1,5 +1,27 @@
 # Progress log
 
+## 2026-11-08: Milestone 3p, search that ignores accents
+
+Why: next step 1. With Czech pages, people type Czech names for their things, but few bother with the háčky in a search box: "vrtacka" didn't find "Vrtačka".
+
+Done:
+- `SearchText.fold` (item package): lower case (`Locale.ROOT`), NFD decomposition, combining marks removed, a short list of letters that don't decompose (ł, ø, đ, ß, æ, œ, ı), then NFC. Lower-casing first matters: "İ" only gains its dot as a mark once lower-cased.
+- `item.search_text` (not null, up to 2500 characters): the folded name and description with a newline between them, so a search can't run from the end of the name into the description (searches never contain a newline, whitespace is collapsed). `Item.update` keeps it in step, so creating and editing both fill it.
+- **Flyway Java migration** `db.migration.V12__item_search_text`: adds the column, fills it for existing items in JDBC batches of 500, then makes it `not null`. Java, not SQL, because H2 has no `unaccent()` and PostgreSQL's needs an extension; this way both databases fold exactly alike and the rules are unit-tested.
+- The group search (`GroupItemSpecs`) now does one `search_text like ?` instead of `lower(name) like ? or lower(description) like ?`, and `ItemFilter.likePattern()` folds the typed text the same way (the `%`/`_`/`\` escaping is unchanged).
+- Tests: `SearchTextTest` (14), `SearchTextMigrationTest` (1, plain Flyway up to V11, insert items, then V12), `GroupSearchTests` +4, `ItemFilterTest` +1, `PostgresMigrationTest` extended (CI only). 284 in total locally.
+
+Verified locally:
+- `./mvnw test`: 284 run, 0 failures, 5 skipped (PostgreSQL, no Docker; CI runs them, including V12).
+- Mutation check: with `likePattern()` lower-casing only (no folding), 3 tests fail (`accentsAreIgnoredWhicheverSideHasThem`, `aCzechSearchFromTheAddressBarWorks`, the new `ItemFilterTest` case). Restored afterwards.
+- In the browser (`lendloop-memory-demo`, seeded with curl): the log shows V12 applied; on the Czech group page "vrtacka" found "Příklepová vrtačka", "cafe" found "Café stolek", and "ŽEBŘÍK" typed into the search box found "Žebřík" with the box keeping the typed text. No server errors.
+- Also closed old next step 5: Settings' *Language of the emails* select saves Czech and still shows it after a reload; no horizontal overflow at 375 px.
+
+Trade-offs:
+- A stored, denormalised column instead of folding in the query: the query stays a plain LIKE on both databases, at the cost of keeping the column in step (one place, `Item.update`) and a re-fill migration if the folding rules ever change.
+- The migration calls the app's `SearchText`, so re-running it on an old database later would use the folding rules of that day. Fine while the rules only grow; a change to them needs its own re-fill migration anyway.
+- Still no stemming ("vrtačky" ≠ "vrtačka") or typo tolerance; PostgreSQL full-text search with a Czech dictionary would bring that but not run on H2.
+
 ## 2026-11-08: Milestone 3o, emails in each user's language
 
 Why: next step 1. After 3n every page was Czech, but every email (reminders, notices, confirmation, password reset) was still English, so a Czech user got an English email about a Czech page.
@@ -574,8 +596,7 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Search that ignores accents ("vrtacka" finds "Vrtačka"), e.g. a normalised search column filled on save.
-2. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
-3. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
-4. Delete accounts that stay unconfirmed for a few weeks; let users change their email (confirming the new one first).
-5. Browser check of the Settings *Language of the emails* select (not done in 3o).
+1. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
+2. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
+3. Delete accounts that stay unconfirmed for a few weeks; let users change their email (confirming the new one first).
+4. Match Czech word forms in search ("vrtačky" finds "vrtačka"), e.g. a simple suffix stemmer in `SearchText`, or PostgreSQL full-text search if H2 is dropped for tests.

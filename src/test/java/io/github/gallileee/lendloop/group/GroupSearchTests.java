@@ -12,12 +12,15 @@ import io.github.gallileee.lendloop.WebTest;
 import io.github.gallileee.lendloop.book.Isbn;
 import io.github.gallileee.lendloop.item.Category;
 import io.github.gallileee.lendloop.item.Item;
+import io.github.gallileee.lendloop.item.ItemForm;
 import io.github.gallileee.lendloop.item.ItemRepository;
+import io.github.gallileee.lendloop.item.ItemService;
 import io.github.gallileee.lendloop.loan.LoanService;
 import io.github.gallileee.lendloop.security.AppUserDetails;
 import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.AppUserRepository;
 import io.github.gallileee.lendloop.web.Dates;
+import java.net.URI;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +42,9 @@ class GroupSearchTests extends WebTest {
 
 	@Autowired
 	LoanService loanService;
+
+	@Autowired
+	ItemService itemService;
 
 	@Autowired
 	Dates dates;
@@ -97,6 +103,50 @@ class GroupSearchTests extends WebTest {
 		// Without escaping, "%" alone would match everything and "_" any single character.
 		assertThat(names("%", null, null)).containsExactly("catan");
 		assertThat(names("c_tan", null, null)).isEmpty();
+	}
+
+	@Test
+	void accentsAreIgnoredWhicheverSideHasThem() {
+		items.save(new Item(alex, "Příklepová vrtačka", "Bosch, s kufříkem", Category.TOOL, true));
+		items.save(new Item(sam, "Cafe table", null, Category.OTHER, true));
+
+		assertThat(names("vrtacka", null, null)).containsExactly("Příklepová vrtačka");
+		assertThat(names("VRTAČKA", null, null)).containsExactly("Příklepová vrtačka");
+		assertThat(names("kufrik", null, null)).containsExactly("Příklepová vrtačka");
+		assertThat(names("café", null, null)).containsExactly("Cafe table");
+	}
+
+	@Test
+	void aSearchDoesNotRunFromTheNameIntoTheDescription() {
+		// Dune's stored text is its name and description with a newline between them, so a search
+		// can't match the end of one and the start of the other.
+		assertThat(names("dune by", null, null)).isEmpty();
+	}
+
+	@Test
+	void editingAnItemUpdatesWhatItIsFoundBy() {
+		Item drill = items.findAll().stream().filter(i -> i.getName().equals("Cordless drill")).findFirst().orElseThrow();
+		ItemForm form = new ItemForm();
+		form.setName("Aku vrtačka");
+		form.setDescription("Makita");
+		form.setCategory(Category.TOOL);
+		form.setAvailable(true);
+		itemService.update(drill.getId(), alex.getId(), form);
+
+		assertThat(names("vrtacka", null, null)).containsExactly("Aku vrtačka");
+		assertThat(names("makita", null, null)).containsExactly("Aku vrtačka");
+		assertThat(names("cordless", null, null)).isEmpty();
+	}
+
+	@Test
+	void aCzechSearchFromTheAddressBarWorks() throws Exception {
+		items.save(new Item(alex, "Vrtačka", null, Category.TOOL, true));
+
+		// A URI, not a template: a template would encode the % signs a second time.
+		mvc.perform(get(URI.create("/groups/" + group.getId() + "?q=vrta%C4%8Dka")).with(as(alex)))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString(">Vrtačka</h3>")))
+			.andExpect(content().string(containsString("value=\"vrtačka\"")));
 	}
 
 	@Test

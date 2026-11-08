@@ -8,7 +8,7 @@ People keep asking online for an app that tracks what they own, what they want a
 
 ## Status
 
-**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, search on the group page, group management, and English/Czech pages and emails (see [Roadmap](#roadmap)).
+**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, search on the group page (ignoring accents), group management, and English/Czech pages and emails (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -40,7 +40,7 @@ People keep asking online for an app that tracks what they own, what they want a
 - **Groups** of friends:
   - Create a group and share its **invite link**. It holds a random 256-bit token and expires after 7 days.
   - The group page lists the members and everything they mark as lendable, with who owns it.
-  - **Search the group's things:** by text in the name or description (so a book's author works too), by category, and "free right now" (leaves out what's lent out). Typing or scanning an ISBN in any format finds the book. The search is a plain GET form, so a search can be bookmarked or shared, and the count shows "2 of 9". `%` and `_` in the search box are taken literally.
+  - **Search the group's things:** by text in the name or description (so a book's author works too), ignoring case and accents ("vrtacka" finds "Vrtačka", "cafe" finds "Café"), by category, and "free right now" (leaves out what's lent out). Typing or scanning an ISBN in any format finds the book. The search is a plain GET form, so a search can be bookmarked or shared, and the count shows "2 of 9". `%` and `_` in the search box are taken literally.
   - Only members can see a group (others get 404). Only its owner (at first, whoever created it) manages the invite link: they can make a new one, which disables the old one at once.
   - **Managing a group** (owner only; other members get 403):
     - **Rename** it, with the same rules as a new group.
@@ -160,12 +160,14 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `EmailLanguageTests`: sign-up on a Czech page stores Czech and sends a Czech confirmation (an English page, English), Settings shows and changes the email language (and keeps it when the field is missing), an unsupported language is refused, and a password reset email follows the account's language. `LoanReminderTests` checks Czech reminders, both languages for one overdue loan, "před 1 dnem" / "před 8 dny", and the owner's Czech reminders for outside loans.
 - `SettingsTests`: the Settings page needs a login, shows both emails on for a new account, saves the name and unticked boxes, refreshes the name in the session, and refuses a blank name.
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
-- `ItemFilterTest`: turning query parameters into a filter (trimming, cutting, unknown categories ignored) and escaping `%`, `_` and `\` for LIKE (no Spring).
-- `GroupSearchTests`: the group search against the database: name and description ignoring case, wildcards taken literally, ISBN in any format, category, "free right now" with a lent-out item, the "2 of 4" count, the form keeping its values, "nothing matches" vs an empty group, bad parameters ignored, and outsiders still getting 404.
+- `ItemFilterTest`: turning query parameters into a filter (trimming, cutting, unknown categories ignored) and escaping `%`, `_` and `\` for LIKE, with the text folded like the items' (no Spring).
+- `SearchTextTest`: folding case and accents (Czech, French, Polish, German, Danish, Turkish dotted I, input typed as letter + combining mark), name and description kept apart, the worst case still fitting the column, and items keeping their search text in step on edit (no Spring).
+- `SearchTextMigrationTest`: the V12 Java migration on its own H2 database that already has items: they get their search text, and the column is required afterwards.
+- `GroupSearchTests`: the group search against the database: name and description ignoring case and accents (both ways), no match running from the name into the description, an edited item found by its new text, a percent-encoded Czech search in the address bar, wildcards taken literally, ISBN in any format, category, "free right now" with a lent-out item, the "2 of 4" count, the form keeping its values, "nothing matches" vs an empty group, bad parameters ignored, and outsiders still getting 404.
 - `GroupManagementTests`: rename (with validation), removing a member (they lose access, the old invite link stops working, an agreed loan carries on), handing over (roles swap, the old owner can then leave), deleting only with the exact name typed (things are kept, the link dies), and 403 for members / 404 for outsiders on every owner action.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
-- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered search), loan, reminder, password-reset and email-confirmation queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
+- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered and accent-free search), loan, reminder, password-reset and email-confirmation queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
 
 ## Project structure
 
@@ -181,6 +183,7 @@ src/main/java/io/github/gallileee/lendloop/
   web/        home redirect, login page, top bar data, date formatting, page language
 src/main/resources/
   db/migration/   Flyway SQL migrations
+src/main/java/db/migration/  Flyway Java migrations (V12 fills the folded search text)
   templates/      Thymeleaf pages
   messages*.properties  page texts (English, Czech)
   static/css/     stylesheet
@@ -209,14 +212,14 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - Someone who knows an email address can pause that person's logins for 15 minutes by failing on purpose. That's the usual trade-off of per-account limits. The pause is short, and failures while paused don't extend it.
 - The emails (reminders, password reset, confirmation) are still English: the reminder job runs outside a request, so it needs each user's language stored first.
 - Czech texts avoid declining names ("Žádost odmítnuta (Sam).", "půjčuje Sam"), because a name typed by a user can't be put into the right grammatical case automatically.
-- Group search is a substring match (`LIKE '%…%'`), not full-text search: no typo tolerance, no ranking, no accents ignored ("Bila" doesn't find "Bílá"), and it can't use an index. Fine for a group's few hundred things.
+- Group search is a substring match (`LIKE '%…%'`) on a folded copy of the name and description, not full-text search: no typo tolerance, no ranking, no word stems ("vrtačky" doesn't find "vrtačka"), and it can't use an index. Letters that aren't a base letter plus an accent are folded only for a short list (ł, ø, đ, ß, æ, œ, ı). Fine for a group's few hundred things.
 - ISBN lookup needs Open Library to be online, and its data is only as good as the catalogue (some editions have no author or an odd publisher name). Book covers aren't shown.
 
 ## Roadmap
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done); ~~group management: rename, remove members, hand over, delete~~ (done); ~~Czech translation of all pages~~ (done); ~~Czech emails~~ (done); accent-insensitive search next.
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done); ~~group management: rename, remove members, hand over, delete~~ (done); ~~Czech translation of all pages~~ (done); ~~Czech emails~~ (done); ~~accent-insensitive search~~ (done); book covers (opt-in) next.
 4. Later: photos, installable PWA, iCal feed of due dates, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).
