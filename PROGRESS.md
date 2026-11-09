@@ -1,5 +1,13 @@
 # Progress log
 
+## 2026-11-09: CI, workflow-guard checks the workflows
+
+Why: workflow-guard 0.4.0 can now be used as a GitHub Action, and this repository's workflows were already clean (PR #18), so a check keeps them that way.
+
+Done: `.github/workflows/workflow-guard.yml` runs `Gallileee/workflow-guard` on pushes to main and on PRs that change `.github/workflows/**`, with a read-only token. The action is pinned to the v0.4.0 commit (by `workflow-guard --fix` itself) with `# v0.4.0` in a comment, so the existing Dependabot `github-actions` entry updates it.
+
+Verified: `workflow-guard` locally reports 0 findings in both workflow files; the new check runs on the PR itself, since the PR adds a workflow.
+
 ## 2026-11-08: Milestone 3p, search that ignores accents
 
 Why: next step 1. With Czech pages, people type Czech names for their things, but few bother with the háčky in a search box: "vrtacka" didn't find "Vrtačka".
