@@ -20,4 +20,4 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           persist-credentials: false
-      - uses: Gallileee/workflow-guard@f50a28bcfe5ed2247792adcd169a5801f56ddebf  # v0.9.0
+      - uses: Gallileee/workflow-guard@ad49d2071c05f5f58a571b08aa1b9f82f8fef412  # v0.11.0
