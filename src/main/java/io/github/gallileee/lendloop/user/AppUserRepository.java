@@ -16,4 +16,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
 	// For the "confirm your email" banner on every page.
 	boolean existsByIdAndEmailVerifiedAtIsNull(Long id);
+
+	// Whether to show book covers to this user (Settings, off by default).
+	boolean existsByIdAndShowBookCoversTrue(Long id);
 }

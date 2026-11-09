@@ -69,6 +69,8 @@
       <ul th:unless="${#lists.isEmpty(page.items)}" class="item-list">
         <li th:each="item : ${page.items}" class="card item">
           <div class="item-main">
+            <img th:replace="~{fragments :: cover(${item})}">
+            <div class="item-text">
             <h3 class="item-name" th:text="${item.name}">Catan</h3>
             <p class="item-meta">
               <span class="tag" th:text="#{${item.category.messageCode}}">Board game</span>
@@ -77,6 +79,7 @@
                     th:text="#{common.from(${item.owner.displayName})}">from Sam</span>
             </p>
             <p th:if="${item.description}" class="item-description" th:text="${item.description}">Base game.</p>
+            </div>
           </div>
           <div class="item-actions" th:with="mine=${item.owner.id == page.me.user.id},
                                               active=${loans.activeLoan(item.id)}">

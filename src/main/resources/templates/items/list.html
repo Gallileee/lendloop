@@ -21,6 +21,8 @@
     <ul th:unless="${#lists.isEmpty(items)}" class="item-list">
       <li th:each="item : ${items}" class="card item">
         <div class="item-main">
+          <img th:replace="~{fragments :: cover(${item})}">
+          <div class="item-text">
           <h2 class="item-name" th:text="${item.name}">Catan</h2>
           <p class="item-meta">
             <span class="tag" th:text="#{${item.category.messageCode}}">Board game</span>
@@ -33,6 +35,7 @@
           </p>
           <p th:if="${item.description}" class="item-description" th:text="${item.description}">Base game.</p>
           <p th:if="${item.isbn}" class="muted" th:text="'ISBN ' + ${item.isbn}">ISBN 9780140328721</p>
+          </div>
         </div>
         <div class="item-actions">
           <!-- For lending in person to someone who isn't on Lendloop; app users ask from a group. -->

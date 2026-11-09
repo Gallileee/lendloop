@@ -36,6 +36,7 @@ People keep asking online for an app that tracks what they own, what they want a
     - The browser that made the change stays logged in, and gets a new session id after a password change.
 - **My things:** add, edit and delete items with a name, category, optional description and a "friends can ask to borrow it" switch.
 - **Add a book by its ISBN.** Type or scan the 10 or 13 digits on Add item and *Look it up*: the title, authors, publisher and date are filled in from [Open Library](https://openlibrary.org/developers/api) (free, no API key), and you check them before saving. ISBN-10 and ISBN-13 are both accepted with or without hyphens, the check digit is verified, and the ISBN is stored as ISBN-13. If Open Library is slow (3 s connect / 5 s read timeout), down, or doesn't know the book, you get a message and fill it in by hand.
+- **Book covers (opt-in).** Turn on *Book covers* in Settings and books with an ISBN show their cover on My things and the group page, from the [Open Library Covers API](https://openlibrary.org/dev/docs/api/covers). Off by default: your browser loads each picture from Open Library, which then sees your IP address. The images are lazy-loaded and sent without a referrer; a book without a cover shows a grey placeholder. Each user decides for themselves, whoever owns the book.
 - **Ownership is enforced on the server.** Every item query is scoped to the logged-in user, and someone else's item answers 404, so its existence isn't revealed.
 - **Groups** of friends:
   - Create a group and share its **invite link**. It holds a random 256-bit token and expires after 7 days.
@@ -118,6 +119,7 @@ Open http://localhost:8080, create an account and add some things. Data is kept 
 | `UNSUBSCRIBE_SECRET` | not set | Signs the unsubscribe links in emails, at least 32 characters (`openssl rand -base64 32`). Not set: a random secret per run, so links in emails stop working after a restart. **Set it in any deployment**; changing it invalidates all links already sent |
 | `OPENLIBRARY_USER_AGENT` | `Lendloop/0.1 (+https://github.com/Gallileee/lendloop)` | Sent with ISBN lookups. Open Library asks regular API users to name their app and a contact, so add your email when you deploy |
 | `OPENLIBRARY_BASE_URL` | `https://openlibrary.org` | Where ISBN lookups go |
+| `COVERS_BASE_URL` | `https://covers.openlibrary.org` | Where browsers load book covers from (for users who turned them on). Empty: covers are off for everyone |
 | `LOGIN_MAX_FAILURES_PER_EMAIL` / `LOGIN_MAX_FAILURES_PER_IP` / `LOGIN_WINDOW` | `5` / `30` / `15m` | Failed-login limits. Behind a reverse proxy, also set `server.forward-headers-strategy=framework`, or every user shares the proxy's IP |
 | `REMINDERS_CRON` | `0 0 8 * * *` | When the reminder job runs (Spring cron, server time zone); `-` turns it off |
 
@@ -142,6 +144,8 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `LanguageResolverTest` and `MessagesConsistencyTest` (no Spring): header parsing, only supported languages accepted, dates in both languages; both files have the same keys and the same `{0}` arguments; every category, loan status and email list has a text in both; every page template sets `<html lang>` from the page language.
 - `RegistrationTests`: sign-up, validation, duplicate emails, CSRF and login.
 - `IsbnTest`: ISBN-10 and ISBN-13 check digits (including `X`), hyphens and spaces, ISBN-10 to ISBN-13, and what's rejected (parameterized, no Spring).
+- `BookCoversTest`: cover URLs from valid ISBNs only, ISBN-10 normalised, an empty base URL turning covers off (no Spring).
+- `BookCoverPagesTests`: covers off by default, shown only to viewers who turned them on and only for books with an ISBN, on the group page and My things, and the Settings checkbox in English and Czech.
 - `BookInfoTest`: how a found book becomes an item name and description, and cutting it to the form's limits.
 - `OpenLibraryClientTest`: the HTTP side against `MockRestServiceServer`: the URLs and `User-Agent`, reading the edition and author JSON, 404 = not found, 500 = unavailable, a failing author skipped, and author keys from the response only used in a URL when they look like `/authors/OL…A` (at most 3).
 - `IsbnLookupTests`: the lookup box on Add item over HTTP with a mocked `BookLookup` (found, unknown, invalid, unreachable), saving the ISBN as ISBN-13, rejecting a wrong one, and the edit page.
@@ -179,7 +183,7 @@ src/main/java/io/github/gallileee/lendloop/
   security/   Spring Security config, the logged-in user, failed-login limits, password reset, email confirmation
   mail/       Mailer: plain-text emails, logged when no mail server is set
   item/       items: entity, repository, service (ownership checks), controller
-  book/       ISBN parsing and validation, Open Library lookup (BookLookup, OpenLibraryClient)
+  book/       ISBN parsing and validation, Open Library lookup (BookLookup, OpenLibraryClient), cover links (BookCovers)
   group/      groups, membership, invite tokens, join flow
   loan/       loans: state machine (Loan), rules (LoanService), pages, reminder job and emails
   web/        home redirect, login page, top bar data, date formatting, page language
@@ -215,13 +219,14 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - The emails (reminders, password reset, confirmation) are still English: the reminder job runs outside a request, so it needs each user's language stored first.
 - Czech texts avoid declining names ("Žádost odmítnuta (Sam).", "půjčuje Sam"), because a name typed by a user can't be put into the right grammatical case automatically.
 - Group search is a substring match (`LIKE '%…%'`) on a folded copy of the name and description, not full-text search: no typo tolerance, no ranking, no word stems ("vrtačky" doesn't find "vrtačka"), and it can't use an index. Letters that aren't a base letter plus an accent are folded only for a short list (ł, ø, đ, ß, æ, œ, ı). Fine for a group's few hundred things.
-- ISBN lookup needs Open Library to be online, and its data is only as good as the catalogue (some editions have no author or an odd publisher name). Book covers aren't shown.
+- ISBN lookup needs Open Library to be online, and its data is only as good as the catalogue (some editions have no author or an odd publisher name).
+- Book covers are looked up by ISBN, which Open Library limits to 100 images per IP every 5 minutes; beyond that, covers show as placeholders for a while. Covers aren't cached by Lendloop (a proxy would hide the viewer's IP but makes the server fetch and store images).
 
 ## Roadmap
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done); ~~group management: rename, remove members, hand over, delete~~ (done); ~~Czech translation of all pages~~ (done); ~~Czech emails~~ (done); ~~accent-insensitive search~~ (done); book covers (opt-in) next.
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done); ~~group management: rename, remove members, hand over, delete~~ (done); ~~Czech translation of all pages~~ (done); ~~Czech emails~~ (done); ~~accent-insensitive search~~ (done); ~~book covers (opt-in)~~ (done); deployment next.
 4. Later: photos, installable PWA, iCal feed of due dates, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).

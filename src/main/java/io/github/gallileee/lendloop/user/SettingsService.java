@@ -23,6 +23,7 @@ public class SettingsService {
 	public AppUser save(Long userId, SettingsForm form) {
 		AppUser user = load(userId);
 		user.changeSettings(form.getDisplayName().trim(), form.isRemindBorrowed(), form.isNotifyLentOverdue());
+		user.changeBookCovers(form.isShowBookCovers());
 		if (form.getEmailLanguage() != null) {
 			user.changeLanguage(Locale.forLanguageTag(form.getEmailLanguage()));
 		}

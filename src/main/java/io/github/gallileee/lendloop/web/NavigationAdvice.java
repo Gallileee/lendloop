@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 
 // Data for the top bar on every page: which section is open (Thymeleaf 3.1 no longer exposes
 // the request to templates), how many borrow requests wait for the user's answer, and whether
-// to ask the user to confirm their email.
+// to ask the user to confirm their email. Also whether the user wants book covers.
 @ControllerAdvice
 public class NavigationAdvice {
 
@@ -53,5 +53,15 @@ public class NavigationAdvice {
 	@ModelAttribute("emailUnconfirmed")
 	boolean emailUnconfirmed(@AuthenticationPrincipal AppUserDetails me, HttpServletRequest request) {
 		return me != null && "GET".equals(request.getMethod()) && users.existsByIdAndEmailVerifiedAtIsNull(me.id());
+	}
+
+	// Book covers are opt-in (Settings), so nobody's IP address goes to Open Library unasked.
+	// Only the two pages that list items need it.
+	@ModelAttribute("showCovers")
+	boolean showCovers(@AuthenticationPrincipal AppUserDetails me, HttpServletRequest request) {
+		String section = section(request);
+		return me != null && "GET".equals(request.getMethod())
+				&& (section.equals("items") || section.equals("groups"))
+				&& users.existsByIdAndShowBookCoversTrue(me.id());
 	}
 }
