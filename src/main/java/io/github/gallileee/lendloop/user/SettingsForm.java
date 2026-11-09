@@ -16,6 +16,8 @@ public class SettingsForm {
 
 	private boolean notifyLentOverdue;
 
+	private boolean showBookCovers;
+
 	// The language of the emails: one of LanguageResolver.SUPPORTED. Left out (null), the
 	// stored language stays as it is.
 	@Pattern(regexp = "en|cs", message = "{validation.language}")
@@ -27,6 +29,7 @@ public class SettingsForm {
 		form.setRemindBorrowed(user.isRemindBorrowed());
 		form.setNotifyLentOverdue(user.isNotifyLentOverdue());
 		form.setEmailLanguage(user.getLocale().getLanguage());
+		form.setShowBookCovers(user.isShowBookCovers());
 		return form;
 	}
 
@@ -52,6 +55,14 @@ public class SettingsForm {
 
 	public void setNotifyLentOverdue(boolean notifyLentOverdue) {
 		this.notifyLentOverdue = notifyLentOverdue;
+	}
+
+	public boolean isShowBookCovers() {
+		return showBookCovers;
+	}
+
+	public void setShowBookCovers(boolean showBookCovers) {
+		this.showBookCovers = showBookCovers;
 	}
 
 	public String getEmailLanguage() {

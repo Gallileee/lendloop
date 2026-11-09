@@ -40,6 +40,16 @@
           <span class="field-error" th:if="${#fields.hasErrors('emailLanguage')}" th:errors="*{emailLanguage}"></span>
         </label>
       </fieldset>
+      <fieldset class="settings-group">
+        <legend th:text="#{settings.covers}">Book covers</legend>
+        <label class="checkbox">
+          <input type="checkbox" th:field="*{showBookCovers}" aria-describedby="covers-hint">
+          <th:block th:text="#{settings.covers.show}">Show book covers next to books that have an ISBN</th:block>
+        </label>
+        <span class="hint" id="covers-hint" th:text="#{settings.covers.hint}">
+          The pictures load from Open Library, which then sees your IP address.
+        </span>
+      </fieldset>
       <div class="form-actions">
         <button type="submit" class="button" th:text="#{common.save}">Save</button>
       </div>

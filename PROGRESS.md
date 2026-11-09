@@ -1,5 +1,28 @@
 # Progress log
 
+## 2026-11-09: Milestone 3q, opt-in book covers
+
+Why: the first item in the next steps. Books are the most common thing to lend, and a cover is the fastest way to recognise one in a list, but loading it from Open Library tells Open Library the viewer's IP address, so it has to be the viewer's own choice.
+
+Acceptance criteria:
+- A new *Book covers* checkbox in Settings, off for new and existing accounts, with a hint that says why.
+- With it on, books with an ISBN show their cover on My things and on the group page; other items and users who left it off get no `<img>` and so make no request to Open Library.
+- The cover URL is built only from a valid, normalised ISBN, and an empty `COVERS_BASE_URL` turns covers off for everyone.
+
+Done:
+- Flyway `V13__book_covers.sql`: `app_user.show_book_covers boolean default false not null`.
+- `book.BookCovers` (`@Component("bookCovers")`): `url(isbn)` gives `{base}/b/isbn/{isbn13}-M.jpg` from the [Covers API](https://openlibrary.org/dev/docs/api/covers), or null for no/invalid ISBN or when covers are off. Templates call it as `${@bookCovers.url(item.isbn)}`.
+- `NavigationAdvice.showCovers`: one `exists` query, only for GETs of `/items*` and `/groups*`.
+- Shared `cover(item)` fragment: `loading="lazy"`, `referrerpolicy="no-referrer"`, `alt=""` (the title is next to it), fixed 56x84 size so the list doesn't jump while images load. Open Library returns a blank 1x1 image for unknown covers (not a 404), so the grey CSS background is the placeholder and no JavaScript `onerror` is needed.
+- The item text moved into an `.item-text` wrapper so the cover sits beside it, also in the phone layout (where `.item` stacks vertically).
+- Settings: the checkbox in its own fieldset, English and Czech texts.
+- Tests: `BookCoversTest` (5, URL building, ISBN-10 normalised, invalid input gives no URL, off switch) and `BookCoverPagesTests` (6: off by default, only books with an ISBN, per viewer, My things, Settings on/off via the hidden-field convention, Czech texts).
+
+Verified locally:
+- `./mvnw test`: 295 run, 0 failures, 5 skipped (Testcontainers tests, no Docker here; CI runs them, including V13 on PostgreSQL).
+
+Not verified: the browser check (starting the demo server was declined in this scheduled run), so the look of the covers on a phone and in dark mode, and a real cover loading from Open Library, are still to be checked with the `lendloop-memory-demo` launch config.
+
 ## 2026-11-09: CI, workflow-guard checks the workflows
 
 Why: workflow-guard 0.4.0 can now be used as a GitHub Action, and this repository's workflows were already clean (PR #18), so a check keeps them that way.
@@ -604,7 +627,7 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Book covers on the group page, behind an opt-in setting (they reveal the viewer's IP to Open Library).
+1. Browser check of the book covers (phone width, dark mode, a real cover such as ISBN 9780441013593).
 2. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
 3. Delete accounts that stay unconfirmed for a few weeks; let users change their email (confirming the new one first).
 4. Match Czech word forms in search ("vrtačky" finds "vrtačka"), e.g. a simple suffix stemmer in `SearchText`, or PostgreSQL full-text search if H2 is dropped for tests.

@@ -45,6 +45,16 @@
   </footer>
 
   <!-- A loan's due date, with an "overdue" warning in words, not only in colour. -->
+  <!-- A book's cover from Open Library, only for users who turned covers on in Settings
+       (showCovers, NavigationAdvice): the request reveals the viewer's IP address to Open Library.
+       alt is empty because the title is right next to it. A book without a cover gets Open
+       Library's blank image, so the placeholder background shows instead of a broken image. -->
+  <th:block th:fragment="cover(item)">
+    <th:block th:if="${showCovers}" th:with="src=${@bookCovers.url(item.isbn)}">
+      <img th:if="${src}" th:src="${src}" class="item-cover" alt="" width="56" height="84"
+           loading="lazy" referrerpolicy="no-referrer">
+    </th:block>
+  </th:block>
   <th:block th:fragment="due(loan, today)">
     <span th:if="${loan.isOverdueOn(today)}" class="status status-late"
           th:text="#{loan.overdueSince(${@dates.local(loan.dueDate)})}">Overdue since 1 Nov 2026</span>

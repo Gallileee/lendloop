@@ -50,6 +50,10 @@ public class AppUser {
 	@Column(name = "preferred_language", nullable = false, length = 8)
 	private String preferredLanguage = LanguageResolver.ENGLISH.getLanguage();
 
+	// See V13__book_covers.sql: off until the user turns it on, since covers load from Open Library.
+	@Column(name = "show_book_covers", nullable = false)
+	private boolean showBookCovers;
+
 	protected AppUser() {
 		// for JPA
 	}
@@ -73,6 +77,14 @@ public class AppUser {
 	public Locale getLocale() {
 		Locale supported = LanguageResolver.supported(preferredLanguage);
 		return supported != null ? supported : LanguageResolver.ENGLISH;
+	}
+
+	public void changeBookCovers(boolean show) {
+		this.showBookCovers = show;
+	}
+
+	public boolean isShowBookCovers() {
+		return showBookCovers;
 	}
 
 	public void changeSettings(String displayName, boolean remindBorrowed, boolean notifyLentOverdue) {
