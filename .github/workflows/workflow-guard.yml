@@ -1,0 +1,23 @@
+name: workflow-guard
+
+# Checks the workflows themselves for security mistakes (unpinned actions, token permissions,
+# template injection) with https://github.com/Gallileee/workflow-guard. Findings appear as
+# annotations on the changed workflow lines. Runs only when a workflow changes.
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/**"]
+  pull_request:
+    paths: [".github/workflows/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+      - uses: Gallileee/workflow-guard@c9201e515f48fb008d9114c307eb6578e99148e9  # v0.4.0

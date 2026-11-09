@@ -169,6 +169,8 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
 - `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered and accent-free search), loan, reminder, password-reset and email-confirmation queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
 
+[workflow-guard](https://github.com/Gallileee/workflow-guard) checks the workflows themselves ([`workflow-guard.yml`](.github/workflows/workflow-guard.yml)) whenever one changes: unpinned actions, token permissions, template injection. Findings show up as annotations on the PR.
+
 ## Project structure
 
 ```
