@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments :: head(${taken} ? #{changeEmail.taken.title} : #{reset.invalid.pageTitle})}"></head>
+<body>
+  <header th:replace="~{fragments :: topbar}"></header>
+  <main class="narrow">
+    <th:block th:if="${taken}">
+      <h1 th:text="#{changeEmail.taken.title}">That address is taken now</h1>
+      <p class="lead" th:text="#{changeEmail.taken.lead}">Someone signed up with that address after you asked for the change.</p>
+    </th:block>
+    <th:block th:unless="${taken}">
+      <h1 th:text="#{reset.invalid.title}">This link doesn't work any more</h1>
+      <p class="lead" th:text="#{changeEmail.invalid.lead}">Email change links work once, for 24 hours.</p>
+    </th:block>
+    <p sec:authorize="isAuthenticated()"><a class="button" th:href="@{/settings#email}" th:text="#{changeEmail.settings}">Go to Settings</a></p>
+    <p sec:authorize="!isAuthenticated()"><a class="button" th:href="@{/login}" th:text="#{login.title}">Log in</a></p>
+  </main>
+  <footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>

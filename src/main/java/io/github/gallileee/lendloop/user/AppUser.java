@@ -113,6 +113,15 @@ public class AppUser {
 		}
 	}
 
+	// The user opened the link sent to the new address, so it is confirmed from now on. Every
+	// session is ended: the login name changed, and a session someone else holds shouldn't
+	// outlive a change of the address that password resets go to.
+	public void changeEmail(String newEmail, Instant confirmedAt) {
+		this.email = newEmail;
+		this.emailVerifiedAt = confirmedAt;
+		endAllSessions();
+	}
+
 	public boolean isEmailVerified() {
 		return emailVerifiedAt != null;
 	}

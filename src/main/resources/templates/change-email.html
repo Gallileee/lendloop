@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en" th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(#{changeEmail.title})}"></head>
+<body>
+  <header th:replace="~{fragments :: topbar}"></header>
+  <main class="narrow">
+    <h1 th:text="#{changeEmail.title}">Change your email</h1>
+    <p class="lead" th:text="#{changeEmail.lead(${newEmail})}">
+      Use kim@example.com as the email address of your Lendloop account?
+    </p>
+    <form th:action="@{/change-email}" method="post" class="card form">
+      <input type="hidden" name="token" th:value="${token}">
+      <button type="submit" class="button" th:text="#{changeEmail.submit}">Change my email</button>
+    </form>
+  </main>
+  <footer th:replace="~{fragments :: footer}"></footer>
+</body>
+</html>

@@ -1,5 +1,34 @@
 # Progress log
 
+## 2026-11-13: Milestone 3r, change your email address
+
+Why: half of next step 3. The email is the login name and where reset links go, but it could never change: someone who moved to a new address had to start a new account and lose their items, groups and loan history.
+
+Design: the OWASP Authentication Cheat Sheet, "Changing a user's registered email address" (https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html#changing-a-users-registered-email-address), the variant without MFA: re-authenticate with the current password, store the new address as pending, send a time-limited link to the new address and an email to the old one. OWASP's no-MFA variant asks the old address to confirm too; Lendloop sends it a notice only (as the cheat sheet says Google does), because someone who lost the old mailbox must still be able to move. The notice says how to cancel and to change the password.
+
+Acceptance criteria:
+- Settings has a *Change email* form (new address + current password). Wrong passwords count like failed logins; the same address, a taken address and an invalid one are refused with a message by the field.
+- The account keeps its old address until the link sent to the new one is used. Settings shows the pending address with *Cancel the change*.
+- Opening the link shows a button; the POST changes the address, marks it confirmed, ends every other session and keeps this one (new session id). Without a login it goes to the login page.
+- Used, replaced, cancelled, expired and made-up links give 404; an address someone signed up with in the meantime gives 409 and changes nothing.
+- Password reset and sign-up confirmation links that went to the old address stop working.
+- English and Czech texts, emails in the user's language.
+
+Done:
+- Flyway `V14__email_change.sql`: `email_change_token` (user, new_email, token hash, expiry), same shape as `email_verification_token`.
+- `security.EmailChangeService` (request / pendingFor / cancel / newEmailFor / confirm), reusing `OneTimeTokens`, `LoginThrottle` and an `AttemptLimiter` (3 per account, 10 per IP an hour). `AppUser.changeEmail` sets the address and the confirmation time and ends all sessions.
+- `security.EmailChangeController`: `POST /settings/email`, `POST /settings/email/cancel`, `GET`/`POST /change-email` (public, like `/verify-email`); templates `change-email.html`, `change-email-invalid.html` (404 and "taken" variants).
+- `user.SettingsPage`: fills in the Settings page's forms and the pending address. Three controllers render that page after a failed post of their own form, and each used to add the others by hand.
+- Tests: `EmailChangeTests` (14, with real login sessions so ended sessions show), `PostgresMigrationTest` +1 (CI only). The WebTest table list gained `email_change_token`.
+
+Verified locally:
+- `./mvnw test`: 310 run, 0 failures, 6 skipped (Testcontainers tests, no Docker here; CI runs them, including V14 on PostgreSQL).
+- Mutation checks, each restored afterwards: not deleting the old reset links fails `linksSentToTheOldAddressStopWorking`; dropping the "taken" check at confirm fails `anAddressTakenInTheMeantimeIsNotStolen` (the unique constraint then throws); not ending sessions in `AppUser.changeEmail` fails `theLinkChangesTheAddressConfirmsItAndEndsOtherSessions`.
+
+Known limit: two accounts confirming the same new address at the same instant would pass the "taken" check together; the unique constraint stops the second with a 500 instead of the 409 page.
+
+Not verified: the browser check (starting the demo server was declined in this scheduled run).
+
 ## 2026-11-09: Milestone 3q, opt-in book covers
 
 Why: the first item in the next steps. Books are the most common thing to lend, and a cover is the fastest way to recognise one in a list, but loading it from Open Library tells Open Library the viewer's IP address, so it has to be the viewer's own choice.
@@ -627,7 +656,7 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Browser check of the book covers (phone width, dark mode, a real cover such as ISBN 9780441013593).
+1. Browser checks with `lendloop-memory-demo`: the book covers (phone width, dark mode, a real cover such as ISBN 9780441013593) and the *Change email* section (pending state, cancel, the confirm page; the link is in the log, `preview_logs` search "change-email?token=").
 2. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
-3. Delete accounts that stay unconfirmed for a few weeks; let users change their email (confirming the new one first).
+3. Delete accounts that stay unconfirmed for a few weeks (a daily job, with a warning email a few days before).
 4. Match Czech word forms in search ("vrtačky" finds "vrtačka"), e.g. a simple suffix stemmer in `SearchText`, or PostgreSQL full-text search if H2 is dropped for tests.

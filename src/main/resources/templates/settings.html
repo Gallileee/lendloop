@@ -8,6 +8,9 @@
 
     <p th:if="${saved}" class="notice" role="status" th:text="#{settings.saved}">Settings saved.</p>
     <p th:if="${emailVerified}" class="notice" role="status" th:text="#{login.emailVerified}">Email confirmed. Thanks!</p>
+    <p th:if="${emailChanged}" class="notice" role="status" th:text="#{settings.emailChanged}">
+      Email address changed. Other devices are logged out.
+    </p>
     <p th:if="${passwordChanged}" class="notice" role="status" th:text="#{settings.passwordChanged}">
       Password changed. You're still logged in here; everywhere else you'll need the new password.
     </p>
@@ -80,6 +83,40 @@
           </form>
         </th:block>
       </div>
+    </section>
+
+    <section>
+      <h2 class="section-title" id="change-email" th:text="#{settings.emailChange.title}">Change email</h2>
+      <p th:if="${emailChange == 'SENT'}" class="notice" role="status" th:text="#{settings.emailChange.sent}">Sent.</p>
+      <p th:if="${emailChange == 'CANCELLED'}" class="notice" role="status" th:text="#{settings.emailChange.cancelled}">
+        Email change cancelled.
+      </p>
+      <div th:if="${pendingEmail}" class="card">
+        <p th:text="#{settings.emailChange.pending(${pendingEmail})}">Waiting for confirmation: new@example.com.</p>
+        <form th:action="@{/settings/email/cancel}" method="post">
+          <button type="submit" class="button button-secondary" th:text="#{settings.emailChange.cancel}">Cancel the change</button>
+        </form>
+      </div>
+      <form th:action="@{/settings/email}" th:object="${emailForm}" method="post" class="card form" novalidate
+            aria-labelledby="change-email">
+        <label><th:block th:text="#{settings.emailChange.new}">New email address</th:block>
+          <input type="email" th:field="*{newEmail}" maxlength="254" required autocomplete="email"
+                 aria-describedby="change-email-hint"
+                 th:attr="aria-invalid=${#fields.hasErrors('newEmail')}">
+          <span class="hint" id="change-email-hint" th:text="#{settings.emailChange.hint}">
+            We send a link to the new address.
+          </span>
+          <span class="field-error" th:if="${#fields.hasErrors('newEmail')}" th:errors="*{newEmail}"></span>
+        </label>
+        <label><th:block th:text="#{settings.password.current}">Current password</th:block>
+          <input type="password" th:field="*{currentPassword}" autocomplete="current-password" required
+                 th:attr="aria-invalid=${#fields.hasErrors('currentPassword')}">
+          <span class="field-error" th:if="${#fields.hasErrors('currentPassword')}" th:errors="*{currentPassword}"></span>
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="button" th:text="#{settings.emailChange.submit}">Send the confirmation link</button>
+        </div>
+      </form>
     </section>
 
     <section>

@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import org.springframework.dao.DataIntegrityViolationException;
 import io.github.gallileee.lendloop.item.ItemForm;
+import io.github.gallileee.lendloop.security.EmailChangeService;
 import io.github.gallileee.lendloop.security.EmailVerificationService;
 import io.github.gallileee.lendloop.security.PasswordResetService;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -61,6 +62,9 @@ class PostgresMigrationTest {
 	@Autowired
 	EmailVerificationService emailVerifications;
 
+	@Autowired
+	EmailChangeService emailChanges;
+
 	// Password reset tokens: the delete queries and the insert, on PostgreSQL. (Without a mail
 	// server the email only goes to the log.)
 	@Test
@@ -88,6 +92,25 @@ class PostgresMigrationTest {
 				Integer.class, user.getId())).as("only the newest link").isOne();
 		assertThat(users.existsByIdAndEmailVerifiedAtIsNull(user.getId())).isTrue();
 		assertThat(emailVerifications.verify("x".repeat(43))).isEmpty();
+	}
+
+	// Pending email changes (V14): the insert, the "pending" query and the delete queries.
+	@Test
+	void emailChangeTokensWorkOnPostgres() {
+		AppUser user = users.save(new AppUser("pg-change@example.com", "Change", "{noop}pg password"));
+
+		assertThat(emailChanges.request(user.getId(), "pg-first@example.com", "pg password", "192.0.2.2"))
+			.isEqualTo(EmailChangeService.RequestResult.SENT);
+		assertThat(emailChanges.request(user.getId(), "PG-New@example.com ", "pg password", "192.0.2.2"))
+			.isEqualTo(EmailChangeService.RequestResult.SENT);
+
+		assertThat(jdbc.queryForObject("select count(*) from email_change_token where user_id = ?", Integer.class,
+				user.getId())).as("only the newest request").isOne();
+		assertThat(emailChanges.pendingFor(user.getId())).contains("pg-new@example.com");
+		emailChanges.cancel(user.getId());
+		assertThat(emailChanges.pendingFor(user.getId())).isEmpty();
+		assertThat(emailChanges.confirm("x".repeat(43))).isEmpty();
+		emailChanges.clearRequestLimits();
 	}
 
 	// The loan queries (nulls last, limit, reminders) and the uniqueness constraints on PostgreSQL.

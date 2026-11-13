@@ -1,7 +1,6 @@
 package io.github.gallileee.lendloop.user;
 
 import io.github.gallileee.lendloop.security.AppUserDetails;
-import io.github.gallileee.lendloop.security.ChangePasswordForm;
 import io.github.gallileee.lendloop.security.CurrentSession;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -19,19 +18,19 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class SettingsController {
 
 	private final SettingsService settingsService;
+	private final SettingsPage settingsPage;
 	private final CurrentSession currentSession;
 
-	public SettingsController(SettingsService settingsService, CurrentSession currentSession) {
+	public SettingsController(SettingsService settingsService, SettingsPage settingsPage,
+			CurrentSession currentSession) {
 		this.settingsService = settingsService;
+		this.settingsPage = settingsPage;
 		this.currentSession = currentSession;
 	}
 
 	@GetMapping("/settings")
 	String form(@AuthenticationPrincipal AppUserDetails me, Model model) {
-		model.addAttribute("form", settingsService.formFor(me.id()));
-		if (!model.containsAttribute("passwordForm")) {
-			model.addAttribute("passwordForm", new ChangePasswordForm());
-		}
+		settingsPage.prepare(me.id(), model);
 		return "settings";
 	}
 
@@ -40,7 +39,7 @@ public class SettingsController {
 			BindingResult result, HttpServletRequest request, HttpServletResponse response, Model model,
 			RedirectAttributes redirect) {
 		if (result.hasErrors()) {
-			model.addAttribute("passwordForm", new ChangePasswordForm());
+			settingsPage.prepare(me.id(), model);
 			return "settings";
 		}
 		AppUser user = settingsService.save(me.id(), form);
