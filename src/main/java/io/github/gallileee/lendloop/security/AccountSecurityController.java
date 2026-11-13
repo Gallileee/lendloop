@@ -1,6 +1,6 @@
 package io.github.gallileee.lendloop.security;
 
-import io.github.gallileee.lendloop.user.SettingsService;
+import io.github.gallileee.lendloop.user.SettingsPage;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -17,13 +17,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 class AccountSecurityController {
 
 	private final AccountSecurityService accounts;
-	private final SettingsService settings;
+	private final SettingsPage settingsPage;
 	private final CurrentSession currentSession;
 
-	AccountSecurityController(AccountSecurityService accounts, SettingsService settings,
+	AccountSecurityController(AccountSecurityService accounts, SettingsPage settingsPage,
 			CurrentSession currentSession) {
 		this.accounts = accounts;
-		this.settings = settings;
+		this.settingsPage = settingsPage;
 		this.currentSession = currentSession;
 	}
 
@@ -48,7 +48,7 @@ class AccountSecurityController {
 		form.setCurrentPassword("");
 		form.setNewPassword("");
 		form.setConfirmPassword("");
-		model.addAttribute("form", settings.formFor(me.id()));
+		settingsPage.prepare(me.id(), model);
 		return "settings";
 	}
 

@@ -9,6 +9,7 @@
 
     <p th:if="${registered}" class="notice" role="status" th:text="#{login.registered}">Account created.</p>
     <p th:if="${emailVerified}" class="notice" role="status" th:text="#{login.emailVerified}">Email confirmed. Thanks!</p>
+    <p th:if="${emailChanged}" class="notice" role="status" th:text="#{login.emailChanged}">Email address changed.</p>
     <p th:if="${passwordReset}" class="notice" role="status" th:text="#{login.passwordReset}">Password changed.</p>
     <p th:if="${param.logout}" class="notice" role="status" th:text="#{login.loggedOut}">You're logged out.</p>
     <p th:if="${param.ended}" class="notice" role="status" th:text="#{login.ended}">You were logged out.</p>

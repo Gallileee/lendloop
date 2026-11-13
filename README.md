@@ -8,7 +8,7 @@ People keep asking online for an app that tracks what they own, what they want a
 
 ## Status
 
-**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, search on the group page (ignoring accents), group management, and English/Czech pages and emails (see [Roadmap](#roadmap)).
+**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, search on the group page (ignoring accents), group management, changing your email address, and English/Czech pages and emails (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -30,6 +30,11 @@ People keep asking online for an app that tracks what they own, what they want a
     - The answer is the same whether or not the account exists, even if sending fails. At most 3 requests per email and 10 per IP an hour.
     - The new password follows the sign-up rules. Resetting also ends a login pause, so you can log in straight away.
   - **Change password** on Settings (asks for the current one; wrong guesses count like failed logins) and **Log out everywhere else**.
+  - **Change email** on Settings, following the [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html#changing-a-users-registered-email-address):
+    - Asks for the new address and the current password (wrong guesses count like failed logins). An address that is already yours or someone else's is refused.
+    - The new address waits as *pending* (shown on Settings, with *Cancel the change*) and gets a one-time link (24 hours, hash only, a newer request turns off the older; at most 3 requests an hour per account, 10 per IP). The old address gets a notice without a link, saying how to cancel.
+    - Until the link is opened, nothing changes: you keep logging in with the old address, so a typo can't lock you out.
+    - Opening the link shows a button (like the sign-up confirmation); the POST changes the address, marks it confirmed and **ends every other session**. Reset and confirmation links that went to the old address stop working. If someone signed up with the new address in the meantime, the change is refused.
   - A password change, a reset, or *Log out everywhere else* **ends every other session**:
     - Each account has a `session_version`, raised by those actions, and each session remembers the number it logged in with.
     - `SessionVersionFilter` compares the two on every logged-in request (one column by primary key) and logs out a stale session with "You were logged out because…". This works without a session registry and with several app instances.

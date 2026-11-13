@@ -27,8 +27,8 @@ public class SecurityConfig {
 				.requestMatchers("/login", "/register", "/css/**", "/error").permitAll()
 				// Getting back into an account without its password.
 				.requestMatchers("/forgot-password", "/forgot-password/sent", "/reset-password").permitAll()
-				// The confirmation link may be opened in a browser that isn't logged in.
-				.requestMatchers("/verify-email").permitAll()
+				// Confirmation links (sign-up, email change) may be opened in a browser that isn't logged in.
+				.requestMatchers("/verify-email", "/change-email").permitAll()
 				// Unsubscribe links are signed per user (UnsubscribeLinks) and work without a login.
 				.requestMatchers("/unsubscribe").permitAll()
 				.anyRequest().authenticated())
