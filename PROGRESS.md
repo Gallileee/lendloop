@@ -1,5 +1,37 @@
 # Progress log
 
+## 2026-11-14: Milestone 3s, delete unused unconfirmed accounts
+
+Why: next step 3. Signing up with a typo, or with someone else's address, made that address taken for good: the real owner couldn't sign up with it, and nothing ever cleaned it up. Keeping data nobody uses also goes against the storage-limitation principle (GDPR Art. 5(1)(e), https://gdpr-info.eu/art-5-gdpr/).
+
+Design: only accounts that are unconfirmed **and** hold nothing (no items, no group memberships, no loans as a borrower) are deleted. An unconfirmed account someone has put work into is kept: the app works without confirmation, and deleting a real person's things because a confirmation email went to spam would be worse than a taken address. One warning email (with a new confirmation link) goes out before; the deletion waits for the whole warning period after it, even when the job was off for a while.
+
+Acceptance criteria:
+- 23 days after sign-up (delete-after 30d minus warning-period 7d), an unused unconfirmed account gets one email in its language: sign-up date, a new confirmation link, the deletion date.
+- It is deleted 30 days after sign-up, but never less than 7 days after the warning; its tokens go with it.
+- Confirmed accounts and accounts with an item, a group or a borrowed loan are never warned or deleted. A warned account that gets confirmed or used loses its warning and is warned again if it becomes unused.
+- A failed warning email leaves nothing recorded (no token, no warning) and is retried on the next run.
+- Configurable through `UNCONFIRMED_CLEANUP_CRON`, `UNCONFIRMED_DELETE_AFTER`, `UNCONFIRMED_WARNING_PERIOD`; a warning period that doesn't fit before the deletion stops the app at startup.
+
+Done:
+- Flyway `V15__unconfirmed_account_cleanup.sql`: `app_user.deletion_warned_at`.
+- `AppUserRepository.UNUSED_AND_UNCONFIRMED` (JPQL `not exists` subqueries) used by `findUnusedToWarn`, `findUnusedToDelete`, `deleteIfUnused` (re-checks everything in the delete statement itself, so an account confirmed or used since the select stays) and `forgetWarningsOfUsedAccounts`.
+- `security.UnconfirmedAccountCleanup`: daily at 3:30, `run(Instant now)` for tests; each warning and each deletion in its own transaction (`TransactionTemplate`), so a failed email rolls back only that account's token and warning.
+- `EmailVerificationService.newLink` split out of `send`, so the warning reuses the same one-time link.
+- `mail.unconfirmed.*` texts in English and Czech.
+- Tests: `UnconfirmedAccountCleanupTests` (11), `PostgresMigrationTest.unconfirmedAccountQueriesWorkOnPostgres` (CI only).
+- Launch config `lendloop-cleanup-demo` (port 8097, packaged jar, in-memory db, job every 10 s, delete-after 90 s, warning 45 s).
+
+Verified locally:
+- `./mvnw test`: 322 run, 0 failures, 7 skipped (Testcontainers tests, no Docker here; CI runs them).
+- Mutation checks, each restored afterwards: dropping the item condition fails 2 tests; deleting without waiting for the warning period fails 3; not forgetting warnings of used accounts fails 2.
+
+Known limits:
+- An item added in the same instant as the delete statement runs would be deleted with the account (on delete cascade); the window is one statement long.
+- Like the reminder job, it assumes one running instance.
+
+Not verified: the demo run (starting `lendloop-cleanup-demo` was declined in this scheduled run). To check: `./mvnw package -DskipTests`, start it, sign up, and watch the log for the warning email (~45 s) and "Deleted unconfirmed, unused user" (~90 s).
+
 ## 2026-11-13: Milestone 3r, change your email address
 
 Why: half of next step 3. The email is the login name and where reset links go, but it could never change: someone who moved to a new address had to start a new account and lose their items, groups and loan history.
@@ -656,7 +688,7 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Browser checks with `lendloop-memory-demo`: the book covers (phone width, dark mode, a real cover such as ISBN 9780441013593) and the *Change email* section (pending state, cancel, the confirm page; the link is in the log, `preview_logs` search "change-email?token=").
-2. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
-3. Delete accounts that stay unconfirmed for a few weeks (a daily job, with a warning email a few days before).
+1. Browser checks: `lendloop-memory-demo` for the book covers (phone width, dark mode, ISBN 9780441013593) and *Change email* (pending state, cancel, confirm page; `preview_logs` search "change-email?token="); `lendloop-cleanup-demo` for the warning email and the deletion in the log.
+2. Show the deletion date in the "confirm your email" banner once an account has been warned.
+3. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
 4. Match Czech word forms in search ("vrtačky" finds "vrtačka"), e.g. a simple suffix stemmer in `SearchText`, or PostgreSQL full-text search if H2 is dropped for tests.
