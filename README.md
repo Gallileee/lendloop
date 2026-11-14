@@ -24,6 +24,7 @@ People keep asking online for an app that tracks what they own, what they want a
     - Opening the link shows a *Confirm my email* button; the POST confirms. A GET that confirmed would let a mail provider's link scanner confirm an address nobody read.
     - Settings shows the address as confirmed or not, with *Send the link again* (a newer link turns off the older; at most 3 an hour per account, 10 per IP).
     - Using a password reset link also confirms the address, since it proves the same thing. Accounts from before this feature count as confirmed.
+    - **Unconfirmed accounts nobody uses are deleted**, so an address typed by mistake doesn't stay taken: no confirmation, no items, no groups and nothing borrowed. 23 days after sign-up a daily job emails a new link and the deletion date; 30 days after sign-up, and at least 7 days after that email, the account is deleted. An account someone has put something into is never deleted, and a warned account that is confirmed or used loses its warning (it gets a new one if it becomes unused again). A failed warning email is tried again the next day, and nobody is deleted without one.
   - **Forgot your password?** (link on the login page) emails a link to choose a new one:
     - The link holds 256 random bits and works **once, for 30 minutes**. Asking again turns off the older link.
     - Only a SHA-256 hash of it is stored, so someone who can read the database still can't use a link.
@@ -127,6 +128,7 @@ Open http://localhost:8080, create an account and add some things. Data is kept 
 | `COVERS_BASE_URL` | `https://covers.openlibrary.org` | Where browsers load book covers from (for users who turned them on). Empty: covers are off for everyone |
 | `LOGIN_MAX_FAILURES_PER_EMAIL` / `LOGIN_MAX_FAILURES_PER_IP` / `LOGIN_WINDOW` | `5` / `30` / `15m` | Failed-login limits. Behind a reverse proxy, also set `server.forward-headers-strategy=framework`, or every user shares the proxy's IP |
 | `REMINDERS_CRON` | `0 0 8 * * *` | When the reminder job runs (Spring cron, server time zone); `-` turns it off |
+| `UNCONFIRMED_CLEANUP_CRON` / `UNCONFIRMED_DELETE_AFTER` / `UNCONFIRMED_WARNING_PERIOD` | `0 30 3 * * *` / `30d` / `7d` | When the unconfirmed-account job runs (`-` turns it off), how long after sign-up an unused unconfirmed account is deleted, and how long before that it is warned (must be shorter) |
 
 To use PostgreSQL and a local mail catcher (needs Docker):
 
@@ -163,6 +165,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `UnsubscribeTests`: the link over HTTP, logged out: GET only asks, the button turns off just that list, the mail provider's one-click POST works without a CSRF token and can be repeated, forged links and deleted accounts get 404, and other POSTs still need a CSRF token.
 - `PasswordResetTests`: the whole reset over HTTP with a mocked `Mailer`: the emailed link sets a new password (the old one stops working), a link works once, an unknown email gets the same answer and no email, a newer link replaces the older one, expired links, only the hash stored, password rules with the link still usable afterwards, malformed tokens, 3 requests an hour, a failed email looking the same (and rolled back), a reset ending a login pause, and CSRF.
 - `EmailVerificationTests`: sign-up emails a link that confirms the address (opening it alone doesn't), the email's text, a logged-in user going back to Settings, a link working once, broken/expired links, only the hash stored, the banner until confirmed, a newer link replacing the older, 3 resends an hour, no links once confirmed, a failing mail server still creating the account (and leaving no token), and login + CSRF on resend. `LoanReminderTests` checks that unconfirmed borrowers and owners get no emails, and `PasswordResetTests` that a reset confirms the address.
+- `UnconfirmedAccountCleanupTests`: the job run at chosen times: warned on day 23 (once, with the dates and a working link), kept until day 30, then deleted with its tokens; the link in the warning keeps the account; a job that was off still gives the whole week; confirmed accounts and accounts with an item, a group or a borrowed loan are never touched; a warned account that gets used loses the warning and is warned again later; a failed email is retried and blocks the deletion; Czech warnings; and the settings check.
 - `AccountSecurityTests`: with real login sessions as "devices": a password change logs out the others but keeps this one (with a new session id), wrong current passwords change nothing and count like failed logins, the password rules, log out everywhere else, a reset logging out every device, a deleted account's session ending, a name change keeping the session, and login + CSRF on both forms.
 - `LoginThrottleTest`: the sliding window with a test clock (no Spring): when the pause starts and ends, case-insensitive emails, one IP and many accounts, success clears the email but not the IP, the longer of two waits, purging old entries, and very long emails.
 - `LoginRateLimitTests`: the limits over HTTP: the 5th wrong password pauses the email (even the right password, from any IP), unknown emails are paused the same way, a success forgets typos, one IP guessing at 30 accounts is paused, the login page explains the pause, and a missing CSRF token is still rejected first and not counted.
@@ -176,7 +179,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `GroupManagementTests`: rename (with validation), removing a member (they lose access, the old invite link stops working, an agreed loan carries on), handing over (roles swap, the old owner can then leave), deleting only with the exact name typed (things are kept, the link dies), and 403 for members / 404 for outsiders on every owner action.
 - `GroupTests`: creating groups, joining by link (including after logging in), expired, unknown and replaced links, owner-only invite management, outsiders getting 404, what the group page lists, and leaving.
 - `LendloopApplicationTests`: the app starts, migrations apply and the entities match the schema.
-- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered and accent-free search), loan, reminder, password-reset and email-confirmation queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
+- `PostgresMigrationTest`: the same on real PostgreSQL through Testcontainers, plus the group (including the filtered and accent-free search), loan, reminder, password-reset, email-confirmation and unconfirmed-account queries and the loan constraints. It is **skipped without Docker** and always runs in CI ([GitHub Actions](.github/workflows/ci.yml)).
 
 [workflow-guard](https://github.com/Gallileee/workflow-guard) checks the workflows themselves ([`workflow-guard.yml`](.github/workflows/workflow-guard.yml)) whenever one changes: unpinned actions, token permissions, template injection. Findings show up as annotations on the PR.
 
@@ -185,7 +188,7 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 ```
 src/main/java/io/github/gallileee/lendloop/
   user/       account entity, sign-up and settings forms, validation and services, signed unsubscribe links
-  security/   Spring Security config, the logged-in user, failed-login limits, password reset, email confirmation
+  security/   Spring Security config, the logged-in user, failed-login limits, password reset, email confirmation, unconfirmed-account cleanup
   mail/       Mailer: plain-text emails, logged when no mail server is set
   item/       items: entity, repository, service (ownership checks), controller
   book/       ISBN parsing and validation, Open Library lookup (BookLookup, OpenLibraryClient), cover links (BookCovers)
@@ -216,7 +219,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 - The invite expiry is shown in the server's time zone. Behind a reverse proxy, set `server.forward-headers-strategy=framework` so invite links use the public host and https.
 - Removing a member, or leaving, doesn't withdraw their open borrow requests; the item's owner still sees and answers them. A removed member is told nothing.
 - Sign-up says when an email is already registered, which reveals that the account exists. That's acceptable for an app between friends, but it should change before a public launch.
-- Signing up with someone else's address still creates an account (it just never gets emails, and its password can't be reset without the inbox). Unconfirmed accounts aren't deleted after a while yet.
+- Signing up with someone else's address still creates an account (it just never gets emails, and its password can't be reset without the inbox). Unused unconfirmed accounts are deleted after 30 days; one that has items or groups stays, still without emails.
 - Without a mail server, the reset and confirmation emails (with their links) only goes to the log. That's meant for local runs; configure mail before others use the app.
 - "Is there an account?" is hidden from the reset page's text, but not from its timing: sending an email takes longer than not sending one.
 - Failed-login counts are kept in memory: a restart forgets them, and two app instances would each count separately.
@@ -231,7 +234,7 @@ The code is organised by feature (`user`, `item`) rather than by layer, so every
 
 1. ~~Accounts and your own items~~ (done)
 2. ~~**Groups and loans:** invite links, membership; ask to borrow, lend with a due date or decline, withdraw, mark returned~~ (done)
-3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done); ~~group management: rename, remove members, hand over, delete~~ (done); ~~Czech translation of all pages~~ (done); ~~Czech emails~~ (done); ~~accent-insensitive search~~ (done); ~~book covers (opt-in)~~ (done); deployment next.
+3. **Reminders and more:** ~~a daily job emails borrowers about due and overdue loans (Mailpit locally)~~ (done); ~~email settings and an overdue notice for the owner~~ (done); ~~record a loan to someone outside the app~~ (done); ~~fill in book details from an ISBN via Open Library~~ (done); ~~search and filter on the group page~~ (done); ~~one-click unsubscribe from emails (RFC 8058)~~ (done); ~~failed-login limits~~ (done); ~~password reset by email~~ (done); ~~change password, log out other sessions~~ (done); ~~email confirmation at sign-up~~ (done); ~~group management: rename, remove members, hand over, delete~~ (done); ~~Czech translation of all pages~~ (done); ~~Czech emails~~ (done); ~~accent-insensitive search~~ (done); ~~book covers (opt-in)~~ (done); ~~change email~~ (done); ~~delete unused unconfirmed accounts~~ (done); deployment next.
 4. Later: photos, installable PWA, iCal feed of due dates, deployment.
 
 The detailed progress log is in [PROGRESS.md](PROGRESS.md).

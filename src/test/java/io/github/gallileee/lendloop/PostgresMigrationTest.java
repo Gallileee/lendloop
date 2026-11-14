@@ -21,6 +21,7 @@ import io.github.gallileee.lendloop.security.EmailChangeService;
 import io.github.gallileee.lendloop.security.EmailVerificationService;
 import io.github.gallileee.lendloop.security.PasswordResetService;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import io.github.gallileee.lendloop.item.ItemService;
 import io.github.gallileee.lendloop.user.AppUser;
 import io.github.gallileee.lendloop.user.AppUserRepository;
@@ -65,6 +66,9 @@ class PostgresMigrationTest {
 	@Autowired
 	EmailChangeService emailChanges;
 
+	@Autowired
+	TransactionTemplate transactions;
+
 	// Password reset tokens: the delete queries and the insert, on PostgreSQL. (Without a mail
 	// server the email only goes to the log.)
 	@Test
@@ -92,6 +96,34 @@ class PostgresMigrationTest {
 				Integer.class, user.getId())).as("only the newest link").isOne();
 		assertThat(users.existsByIdAndEmailVerifiedAtIsNull(user.getId())).isTrue();
 		assertThat(emailVerifications.verify("x".repeat(43))).isEmpty();
+	}
+
+	// Unconfirmed account cleanup (V15): the "not exists" conditions in a select, an update and a
+	// delete, on PostgreSQL. Uses the repository directly, since other tests' users share this
+	// database and UnconfirmedAccountCleanup.run would warn or delete them too.
+	@Test
+	void unconfirmedAccountQueriesWorkOnPostgres() {
+		AppUser unused = users.save(new AppUser("pg-unused@example.com", "Unused", "{noop}irrelevant"));
+		AppUser withItem = users.save(new AppUser("pg-item@example.com", "Item", "{noop}irrelevant"));
+		ItemForm form = new ItemForm();
+		form.setName("Ladder");
+		form.setCategory(Category.TOOL);
+		itemService.create(withItem.getId(), form);
+		Instant later = Instant.now().plusSeconds(60);
+
+		assertThat(users.findUnusedToWarn(later)).contains(unused.getId()).doesNotContain(withItem.getId());
+		jdbc.update("update app_user set deletion_warned_at = ? where id in (?, ?)", java.sql.Timestamp.from(Instant.now()),
+				unused.getId(), withItem.getId());
+
+		Integer forgotten = transactions.execute(status -> users.forgetWarningsOfUsedAccounts());
+		assertThat(forgotten).isGreaterThanOrEqualTo(1);
+		assertThat(users.findById(withItem.getId()).orElseThrow().getDeletionWarnedAt()).isNull();
+		assertThat(users.findUnusedToDelete(later, later)).contains(unused.getId()).doesNotContain(withItem.getId());
+		Integer keptCount = transactions.execute(status -> users.deleteIfUnused(withItem.getId()));
+		assertThat(keptCount).isZero();
+		Integer deletedCount = transactions.execute(status -> users.deleteIfUnused(unused.getId()));
+		assertThat(deletedCount).isOne();
+		assertThat(users.existsById(unused.getId())).isFalse();
 	}
 
 	// Pending email changes (V14): the insert, the "pending" query and the delete queries.

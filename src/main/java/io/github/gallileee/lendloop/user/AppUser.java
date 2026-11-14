@@ -54,6 +54,11 @@ public class AppUser {
 	@Column(name = "show_book_covers", nullable = false)
 	private boolean showBookCovers;
 
+	// See V15__unconfirmed_account_cleanup.sql: when we warned that this unconfirmed, unused
+	// account will be deleted. Null if not warned.
+	@Column(name = "deletion_warned_at")
+	private Instant deletionWarnedAt;
+
 	protected AppUser() {
 		// for JPA
 	}
@@ -124,6 +129,15 @@ public class AppUser {
 
 	public boolean isEmailVerified() {
 		return emailVerifiedAt != null;
+	}
+
+	// The "confirm or it will be deleted" email went out.
+	public void markDeletionWarned(Instant when) {
+		this.deletionWarnedAt = when;
+	}
+
+	public Instant getDeletionWarnedAt() {
+		return deletionWarnedAt;
 	}
 
 	public Instant getEmailVerifiedAt() {

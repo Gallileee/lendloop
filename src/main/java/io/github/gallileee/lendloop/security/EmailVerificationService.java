@@ -112,13 +112,24 @@ public class EmailVerificationService {
 	}
 
 	private void send(AppUser user) {
+		String link = newLink(user);
+		mailer.send(user.getEmail(), messages.in(user.getLocale(), "mail.verify.subject"), text(user, link), null);
+	}
+
+	// A new confirmation link for the user, replacing any older one. The caller emails it, in the
+	// same transaction, so a failed email leaves no unsent token behind.
+	String newLink(AppUser user) {
 		Instant now = clock.instant();
 		tokens.deleteExpired(now);
 		// Only the newest link works.
 		tokens.deleteAllForUser(user.getId());
 		String token = OneTimeTokens.newToken();
 		tokens.save(new EmailVerificationToken(user, OneTimeTokens.hash(token), now.plus(LINK_VALIDITY), now));
-		mailer.send(user.getEmail(), messages.in(user.getLocale(), "mail.verify.subject"), text(user, token), null);
+		return UriComponentsBuilder.fromUriString(baseUrl)
+			.path("/verify-email")
+			.queryParam("token", token)
+			.build()
+			.toUriString();
 	}
 
 	private Optional<EmailVerificationToken> find(String token) {
@@ -128,12 +139,7 @@ public class EmailVerificationService {
 		return tokens.findByTokenHash(OneTimeTokens.hash(token)).filter(t -> t.isValidAt(clock.instant()));
 	}
 
-	private String text(AppUser user, String token) {
-		String link = UriComponentsBuilder.fromUriString(baseUrl)
-			.path("/verify-email")
-			.queryParam("token", token)
-			.build()
-			.toUriString();
+	private String text(AppUser user, String link) {
 		Locale lang = user.getLocale();
 		return messages.in(lang, "mail.greeting", Mailer.singleLine(user.getDisplayName())) + "\n\n"
 				+ messages.in(lang, "mail.verify.body", link, LINK_VALIDITY.toHours()) + "\n\n" + messages.in(lang, "mail.signature")
