@@ -34,6 +34,35 @@ class SearchTextTest {
 	}
 
 	@Test
+	void stemsAreFoldedWordsInOrder() {
+		assertThat(SearchText.stems("Příklepová VRTAČKA, 2 kufříky!")).containsExactly("priklp", "vrtack", "2", "kufrik");
+		assertThat(SearchText.stems("snake_case 100%")).containsExactly("snak", "cas", "100");
+		assertThat(SearchText.stems(" , ")).isEmpty();
+		assertThat(SearchText.stems(null)).isEmpty();
+	}
+
+	@Test
+	void stemsForAnItemStartEachWordWithASpaceAndKeepNameAndDescriptionApart() {
+		assertThat(SearchText.stemsForItem("Příklepová vrtačka", "Bosch, s kufříkem"))
+			.isEqualTo(" priklp vrtack\n bosch s kufrik");
+		assertThat(SearchText.stemsForItem("Stan", null)).isEqualTo(" stan");
+		assertThat(SearchText.stemsForItem("Stan", "")).isEqualTo(" stan");
+	}
+
+	@Test
+	void stemsForAnItemFitTheColumnWhateverTheText() {
+		// Many short words (each one gains the space before it) and letters that double when folded.
+		String name = "ß".repeat(Item.SEARCH_TEXT_LENGTH / 4);
+		String description = "ß ".repeat(Item.SEARCH_TEXT_LENGTH / 8);
+
+		String folded = SearchText.forItem(name, description);
+		assertThat(folded.length()).isLessThanOrEqualTo(Item.SEARCH_TEXT_LENGTH);
+		assertThat(SearchText.stemsForItem(name, description).length())
+			.isLessThanOrEqualTo(folded.length() + 2)
+			.isLessThanOrEqualTo(Item.SEARCH_STEMS_LENGTH);
+	}
+
+	@Test
 	void nothingFoldsToEmpty() {
 		assertThat(SearchText.fold(null)).isEmpty();
 		assertThat(SearchText.fold("")).isEmpty();

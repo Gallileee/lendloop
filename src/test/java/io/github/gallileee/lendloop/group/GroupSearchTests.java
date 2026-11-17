@@ -117,6 +117,50 @@ class GroupSearchTests extends WebTest {
 	}
 
 	@Test
+	void otherCzechWordFormsFindTheThing() {
+		items.save(new Item(alex, "Příklepová vrtačka", "Bosch, s kufříkem", Category.TOOL, true));
+		items.save(new Item(sam, "Kniha receptů", "Petrova", Category.BOOK, true));
+		items.save(new Item(sam, "Žebřík", null, Category.TOOL, true));
+
+		assertThat(names("vrtačky", null, null)).containsExactly("Příklepová vrtačka");
+		assertThat(names("vrtacce", null, null)).containsExactly("Příklepová vrtačka");
+		assertThat(names("příklepovou vrtačkou", null, null)).containsExactly("Příklepová vrtačka");
+		// The last word may still be being typed.
+		assertThat(names("příklepové vrt", null, null)).containsExactly("Příklepová vrtačka");
+		assertThat(names("kufřík", null, null)).containsExactly("Příklepová vrtačka");
+		assertThat(names("knize", null, null)).containsExactly("Kniha receptů");
+		assertThat(names("recepty", null, null)).containsExactly("Kniha receptů");
+		assertThat(names("Petr", null, null)).containsExactly("Kniha receptů");
+		assertThat(names("žebříky", null, null)).containsExactly("Žebřík");
+		assertThat(names("zebricich", null, null)).containsExactly("Žebřík");
+	}
+
+	@Test
+	void wordFormsStillHaveToBeTheSameWordsInTheSameOrder() {
+		items.save(new Item(alex, "Příklepová vrtačka", "Bosch, s kufříkem", Category.TOOL, true));
+
+		assertThat(names("vrtačky příklepové", null, null)).isEmpty();
+		// A stem has to start a word: "rtačky" is not "vrtačka".
+		assertThat(names("rtačky", null, null)).isEmpty();
+		// Across the name and the description, as with the plain search.
+		assertThat(names("vrtačky bosch", null, null)).isEmpty();
+		assertThat(names("vrtak", null, null)).isEmpty();
+	}
+
+	@Test
+	void editingAnItemUpdatesItsStems() {
+		Item drill = items.findAll().stream().filter(i -> i.getName().equals("Cordless drill")).findFirst().orElseThrow();
+		ItemForm form = new ItemForm();
+		form.setName("Aku vrtačka");
+		form.setCategory(Category.TOOL);
+		form.setAvailable(true);
+		itemService.update(drill.getId(), alex.getId(), form);
+
+		assertThat(names("vrtačkou", null, null)).containsExactly("Aku vrtačka");
+		assertThat(names("drills", null, null)).isEmpty();
+	}
+
+	@Test
 	void aSearchDoesNotRunFromTheNameIntoTheDescription() {
 		// Dune's stored text is its name and description with a newline between them, so a search
 		// can't match the end of one and the start of the other.
