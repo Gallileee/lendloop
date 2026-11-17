@@ -1,5 +1,34 @@
 # Progress log
 
+## 2026-11-17: Milestone 3t, Czech word forms in search
+
+Why: next step 4. Czech nouns and adjectives change their endings with the case, so someone looking for a drill types "vrtačky" (have you got any drills?) or "vrtačku", and the substring search only found "vrtačka" when typed in that form.
+
+Research: Dolamic & Savoy, "Indexing and stemming approaches for the Czech language" (Information Processing & Management 45(6), 2009, https://ir.webis.de/anthology/2009.ipm_journal-ir0anthology0volumeA45A6.6/) found that ignoring word forms costs Czech search a lot, and that a *light* stemmer (case endings only) does about as well as an aggressive one; Snowball's Czech stemmer (https://snowballstem.org/algorithms/czech/stemmer.html) also starts from the light version and notes the aggressive one overstems. PostgreSQL full-text search has no Czech dictionary built in and wouldn't run on H2 in the tests.
+
+Acceptance criteria:
+- "vrtačky", "vrtačkou", "vrtacce" find "Vrtačka"; "knize" finds "Kniha"; "žebříky" finds "Žebřík"; "Petr" finds "Petrova".
+- The words still have to be in order, start a word, and stay within the name or within the description (as the plain search).
+- Stemming only adds matches: everything the old search found is still found.
+- Existing items get their stems from a migration; creating and editing keep them in step.
+
+Done:
+- `CzechStemmer` (item package): the paper's light stemmer on folded words (lower case, no accents, as `SearchText` leaves them): the longest case ending that leaves enough of the word, possessive `-ov`/`-in`/`-uv`, then the sound changes (k/c, h/z, čt/ck, the "e" before the last letter). Left out because folding blurs them: "št" -> "sk" and "ů" -> "o". Words under 4 letters and words with digits stay as they are.
+- `SearchText.stems` / `stemsForItem`: each word after a space (`" priklp vrtack\n bosch s kufrik"`), a newline between the name and the description.
+- `item.search_stems` (not null, 2502 characters: never longer than `search_text` + 2), filled by the **Java migration `V16__item_search_stems`** (batches of 500, then `not null`), kept in step by `Item.update`.
+- The group search matches `search_text like '%text%'` **or** `search_stems like '% stem1 stem2%'` (`ItemFilter.stemsPattern()`, escaped like `likePattern()`). The first stem has to start a word and match the whole stem, the last may be cut short, so "příklepové vrt" still finds "Příklepová vrtačka" while it's being typed.
+- Tests: `CzechStemmerTest` (18: word forms of seven words, short words, digits, ending lengths, words kept apart), `SearchTextTest` +3, `ItemFilterTest` +4, `GroupSearchTests` +3, `SearchStemsMigrationTest` (1, Flyway to V15, items, then V16), `PostgresMigrationTest` +1 query (CI only). 351 in total locally, 0 failures, 7 skipped (PostgreSQL / Docker).
+
+Verified:
+- `./mvnw test`: 351 tests, 0 failures, 7 skipped.
+- Mutation checks: with the stems branch left out of the query, 2 `GroupSearchTests` fail; without the k/c rule, 2 `CzechStemmerTest` cases and `otherCzechWordFormsFindTheThing` fail. Restored afterwards.
+
+Not verified: the search in a browser (starting `lendloop-memory-demo` was declined in this automated run), and PostgreSQL locally (CI runs it).
+
+Trade-offs and limits:
+- A rule-based light stemmer, not a dictionary: irregular forms ("pes" / "psa", "člověk" / "lidé") stay apart, and a few unrelated words may meet ("noha" and "nože" both become "noh"). It also cuts English words ("game" -> "gam"), which only matters for which words end up equal, since both sides are cut alike.
+- Like V12, the migration calls the app's stemmer; a later change to the rules needs its own re-fill migration.
+
 ## 2026-11-14: Milestone 3s, delete unused unconfirmed accounts
 
 Why: next step 3. Signing up with a typo, or with someone else's address, made that address taken for good: the real owner couldn't sign up with it, and nothing ever cleaned it up. Keeping data nobody uses also goes against the storage-limitation principle (GDPR Art. 5(1)(e), https://gdpr-info.eu/art-5-gdpr/).
@@ -690,5 +719,6 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 1. Browser checks: `lendloop-memory-demo` for the book covers (phone width, dark mode, ISBN 9780441013593) and *Change email* (pending state, cancel, confirm page; `preview_logs` search "change-email?token="); `lendloop-cleanup-demo` for the warning email and the deletion in the log.
 2. Show the deletion date in the "confirm your email" banner once an account has been warned.
+   Also the Czech word forms in search: "vrtačky" and "příklepové vrt" on the Czech group page.
 3. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
-4. Match Czech word forms in search ("vrtačky" finds "vrtačka"), e.g. a simple suffix stemmer in `SearchText`, or PostgreSQL full-text search if H2 is dropped for tests.
+4. Search ranking: with stems, more things match; show whole-word and exact matches first.

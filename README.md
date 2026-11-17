@@ -8,7 +8,7 @@ People keep asking online for an app that tracks what they own, what they want a
 
 ## Status
 
-**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, search on the group page (ignoring accents), group management, changing your email address, and English/Czech pages and emails (see [Roadmap](#roadmap)).
+**Milestones 1 and 2 are done**, and milestone 3 has started: accounts, your own items, groups with invite links, loans from request to return, loans to people who aren't on the app, email reminders about due dates, a Settings page to choose which emails you get, book details from an ISBN, search on the group page (ignoring accents and Czech word endings), group management, changing your email address, and English/Czech pages and emails (see [Roadmap](#roadmap)).
 
 ## Features
 
@@ -47,7 +47,7 @@ People keep asking online for an app that tracks what they own, what they want a
 - **Groups** of friends:
   - Create a group and share its **invite link**. It holds a random 256-bit token and expires after 7 days.
   - The group page lists the members and everything they mark as lendable, with who owns it.
-  - **Search the group's things:** by text in the name or description (so a book's author works too), ignoring case and accents ("vrtacka" finds "Vrtačka", "cafe" finds "Café"), by category, and "free right now" (leaves out what's lent out). Typing or scanning an ISBN in any format finds the book. The search is a plain GET form, so a search can be bookmarked or shared, and the count shows "2 of 9". `%` and `_` in the search box are taken literally.
+  - **Search the group's things:** by text in the name or description (so a book's author works too), ignoring case and accents ("vrtacka" finds "Vrtačka", "cafe" finds "Café") and Czech word endings ("vrtačky", "vrtačkou" and "vrtačce" find "Vrtačka", "knize" finds "Kniha"; a light suffix stemmer after Dolamic & Savoy, matched on whole words in order), by category, and "free right now" (leaves out what's lent out). Typing or scanning an ISBN in any format finds the book. The search is a plain GET form, so a search can be bookmarked or shared, and the count shows "2 of 9". `%` and `_` in the search box are taken literally.
   - Only members can see a group (others get 404). Only its owner (at first, whoever created it) manages the invite link: they can make a new one, which disables the old one at once.
   - **Managing a group** (owner only; other members get 403):
     - **Rename** it, with the same rules as a new group.
@@ -174,6 +174,8 @@ The HTTP tests extend `WebTest`. It deliberately has **no test transaction**: ea
 - `LoanConstraintTests`: the database refuses two active loans for one item and duplicate open requests.
 - `ItemFilterTest`: turning query parameters into a filter (trimming, cutting, unknown categories ignored) and escaping `%`, `_` and `\` for LIKE, with the text folded like the items' (no Spring).
 - `SearchTextTest`: folding case and accents (Czech, French, Polish, German, Danish, Turkish dotted I, input typed as letter + combining mark), name and description kept apart, the worst case still fitting the column, and items keeping their search text in step on edit (no Spring).
+- `CzechStemmerTest`: the forms of Czech nouns, adjectives and possessives meeting at one stem (with the k/c and h/z changes and the "e" that drops out), short words and words with digits left alone, and different words kept apart (no Spring).
+- `SearchStemsMigrationTest`: the V16 Java migration filling `search_stems` for items that already exist, and the column being required afterwards.
 - `SearchTextMigrationTest`: the V12 Java migration on its own H2 database that already has items: they get their search text, and the column is required afterwards.
 - `GroupSearchTests`: the group search against the database: name and description ignoring case and accents (both ways), no match running from the name into the description, an edited item found by its new text, a percent-encoded Czech search in the address bar, wildcards taken literally, ISBN in any format, category, "free right now" with a lent-out item, the "2 of 4" count, the form keeping its values, "nothing matches" vs an empty group, bad parameters ignored, and outsiders still getting 404.
 - `GroupManagementTests`: rename (with validation), removing a member (they lose access, the old invite link stops working, an agreed loan carries on), handing over (roles swap, the old owner can then leave), deleting only with the exact name typed (things are kept, the link dies), and 403 for members / 404 for outsiders on every owner action.

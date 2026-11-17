@@ -62,12 +62,15 @@ final class GroupItemSpecs {
 	}
 
 	// Name or description contains the text, ignoring case and accents (both sides are folded by
-	// SearchText; the item's side is stored in search_text). A typed ISBN also finds the book by
-	// its stored ISBN-13, whatever format it was typed in.
+	// SearchText; the item's side is stored in search_text), or has the same words in another
+	// Czech form (their stems, stored in search_stems). So stemming only ever adds matches. A
+	// typed ISBN also finds the book by its stored ISBN-13, whatever format it was typed in.
 	private static Predicate textMatches(Root<Item> item, CriteriaBuilder cb, ItemFilter filter) {
 		String pattern = filter.likePattern();
 		List<Predicate> any = new ArrayList<>();
 		any.add(cb.like(item.get("searchText"), pattern, ItemFilter.ESCAPE_CHAR));
+		filter.stemsPattern()
+			.ifPresent(stems -> any.add(cb.like(item.get("searchStems"), stems, ItemFilter.ESCAPE_CHAR)));
 		filter.isbn().ifPresent(isbn -> any.add(cb.equal(item.get("isbn"), isbn.value())));
 		return cb.or(any.toArray(Predicate[]::new));
 	}

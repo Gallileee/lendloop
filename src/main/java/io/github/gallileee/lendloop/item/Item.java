@@ -52,6 +52,14 @@ public class Item {
 	// Room for the name and description even if folding doubles every letter ("ß" -> "ss").
 	public static final int SEARCH_TEXT_LENGTH = 2500;
 
+	// The stems of the name and description (see SearchText.stemsForItem), kept in step by update().
+	@Column(name = "search_stems", nullable = false, length = SEARCH_STEMS_LENGTH)
+	private String searchStems;
+
+	// Never longer than the folded text: a stem is never longer than its word, and each word
+	// already has a space or newline before it, except the first one of the name and description.
+	public static final int SEARCH_STEMS_LENGTH = SEARCH_TEXT_LENGTH + 2;
+
 	protected Item() {
 		// for JPA
 	}
@@ -68,6 +76,7 @@ public class Item {
 		this.category = category;
 		this.available = available;
 		this.searchText = SearchText.forItem(name, description);
+		this.searchStems = SearchText.stemsForItem(name, description);
 	}
 
 	public Long getId() {
@@ -104,6 +113,10 @@ public class Item {
 
 	public String getSearchText() {
 		return searchText;
+	}
+
+	public String getSearchStems() {
+		return searchStems;
 	}
 
 	public Instant getCreatedAt() {

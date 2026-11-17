@@ -55,6 +55,21 @@ class ItemFilterTest {
 		assertThat(new ItemFilter(text, null, false).likePattern()).isEqualTo(pattern);
 	}
 
+	@ParameterizedTest
+	@CsvSource(delimiter = '|', value = {
+			"Vrtačky              | % vrtack%",
+			"příklepovou vrtačkou | % priklp vrtack%",
+			"snake_case 100%      | % snak cas 100%" })
+	void stemsPatternHasTheStemsOfTheWordsInOrder(String text, String pattern) {
+		assertThat(new ItemFilter(text, null, false).stemsPattern()).hasValue(pattern);
+	}
+
+	@Test
+	void textWithoutWordsHasNoStemsPattern() {
+		assertThat(new ItemFilter("%", null, false).stemsPattern()).isEmpty();
+		assertThat(ItemFilter.NONE.stemsPattern()).isEmpty();
+	}
+
 	@Test
 	void anIsbnInAnyFormatIsRecognised() {
 		assertThat(ItemFilter.parse("0-441-01359-7", null, null).isbn()).hasValueSatisfying(

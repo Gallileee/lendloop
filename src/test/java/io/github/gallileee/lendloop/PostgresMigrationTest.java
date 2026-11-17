@@ -228,6 +228,9 @@ class PostgresMigrationTest {
 		// The folded search_text column (V12), on PostgreSQL.
 		assertThat(groupService.page(group.getId(), owner.getId(), ItemFilter.parse("VRTACKA", null, null)).items())
 			.extracting(Item::getName).containsExactly("Vrtačka");
+		// The stems column (V16), on PostgreSQL.
+		assertThat(groupService.page(group.getId(), owner.getId(), ItemFilter.parse("vrtačkou", null, null)).items())
+			.extracting(Item::getName).containsExactly("Vrtačka");
 		assertThat(groupService.page(group.getId(), owner.getId(), ItemFilter.parse("978-0-441-01359-3", null, null))
 			.items()).isEmpty();
 		assertThat(groupService.membershipsOf(friend.getId())).hasSize(1);

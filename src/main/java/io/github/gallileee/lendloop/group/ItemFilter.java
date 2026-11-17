@@ -4,6 +4,7 @@ import io.github.gallileee.lendloop.book.Isbn;
 import io.github.gallileee.lendloop.item.Category;
 import io.github.gallileee.lendloop.item.SearchText;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 // What someone searches for on a group page: text in the name or description (or an ISBN), a
@@ -49,11 +50,27 @@ public record ItemFilter(String text, Category category, boolean availableNow) {
 	// "%text%" for a LIKE on Item.searchText: folded the same way (lower case, no accents), with
 	// the user's own % and _ taken literally. Must be used with ESCAPE_CHAR as the escape character.
 	public String likePattern() {
-		String escaped = SearchText.fold(text)
-			.replace(String.valueOf(ESCAPE_CHAR), ESCAPE_CHAR + "" + ESCAPE_CHAR)
+		return "%" + escapeLike(SearchText.fold(text)) + "%";
+	}
+
+	// "% vrtack%" for a LIKE on Item.searchStems: the stems of the typed words in the same order,
+	// the first one at the start of a word and the last one possibly cut short ("vrtačky" finds
+	// "Vrtačka", "příklepová vrt" finds "Příklepová vrtačka"). Empty when the text has no words
+	// ("%"). Must be used with ESCAPE_CHAR as the escape character.
+	public Optional<String> stemsPattern() {
+		List<String> stems = SearchText.stems(text);
+		if (stems.isEmpty()) {
+			return Optional.empty();
+		}
+		return Optional.of("% " + escapeLike(String.join(" ", stems)) + "%");
+	}
+
+	// Stems hold only letters and digits, but escaping costs nothing and keeps that an assumption
+	// of SearchText rather than of the query.
+	private static String escapeLike(String text) {
+		return text.replace(String.valueOf(ESCAPE_CHAR), ESCAPE_CHAR + "" + ESCAPE_CHAR)
 			.replace("%", ESCAPE_CHAR + "%")
 			.replace("_", ESCAPE_CHAR + "_");
-		return "%" + escaped + "%";
 	}
 
 	// For the template: the category's name for the <select>, or "" for "any".
