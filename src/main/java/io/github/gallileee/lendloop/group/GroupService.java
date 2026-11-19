@@ -8,6 +8,7 @@ import io.github.gallileee.lendloop.web.RuleException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Sort;
@@ -43,11 +44,13 @@ public class GroupService {
 	}
 
 	// What a group can borrow, in name order (ignoring case); the id keeps equal names stable.
+	// A search then puts the closest matches first and keeps this order within each tier.
 	private static final Sort ITEM_ORDER = Sort.by(Sort.Order.asc("name").ignoreCase(), Sort.Order.asc("id"));
 
 	// Everything the group page shows, loaded in one transaction. `items` are the lendable items
-	// that match the filter; `lendableCount` counts them all, so the page can say "2 of 9" and
-	// tell "nothing matches" apart from "nobody has added anything yet".
+	// that match the filter, closest matches first when something was typed (SearchRank);
+	// `lendableCount` counts them all, so the page can say "2 of 9" and tell "nothing matches"
+	// apart from "nobody has added anything yet".
 	public record GroupPage(AppGroup group, GroupMember me, List<GroupMember> members, ItemFilter filter,
 			List<Item> items, long lendableCount) {
 	}
@@ -74,8 +77,9 @@ public class GroupService {
 	public GroupPage page(Long groupId, Long userId, ItemFilter filter) {
 		GroupMember me = membership(groupId, userId);
 		Specification<Item> lendable = GroupItemSpecs.lendableInGroup(groupId);
-		List<Item> shown = items.findAll(
-				lendable.and(GroupItemSpecs.matching(filter)).and(GroupItemSpecs.withOwner()), ITEM_ORDER);
+		List<Item> shown = new ArrayList<>(items.findAll(
+				lendable.and(GroupItemSpecs.matching(filter)).and(GroupItemSpecs.withOwner()), ITEM_ORDER));
+		SearchRank.bestFirst(shown, filter);
 		long lendableCount = filter.isActive() ? items.count(lendable) : shown.size();
 		return new GroupPage(me.getGroup(), me, members.findByGroupIdWithUser(groupId), filter, shown,
 				lendableCount);

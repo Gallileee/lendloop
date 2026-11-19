@@ -66,6 +66,9 @@
         <th:block th:text="#{group.search.noMatch}">Nothing matches your search.</th:block>
         <a th:href="@{/groups/{id}(id=${page.group.id})}" th:text="#{group.search.showAll}">Show everything</a>
       </p>
+      <!-- Only with typed text: a category or "free now" alone keeps the plain name order. -->
+      <p th:if="${!page.filter.text.isEmpty() and #lists.size(page.items) > 1}" class="hint muted"
+         th:text="#{group.search.bestFirst}">Closest matches first.</p>
       <ul th:unless="${#lists.isEmpty(page.items)}" class="item-list">
         <li th:each="item : ${page.items}" class="card item">
           <div class="item-main">
