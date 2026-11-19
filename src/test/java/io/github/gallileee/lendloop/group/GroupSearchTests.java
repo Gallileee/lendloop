@@ -92,7 +92,7 @@ class GroupSearchTests extends WebTest {
 
 	@Test
 	void textMatchesNameOrDescriptionIgnoringCase() {
-		assertThat(names("DUNE", null, null)).containsExactly("Children of Dune", "Dune");
+		assertThat(names("DUNE", null, null)).containsExactlyInAnyOrder("Children of Dune", "Dune");
 		assertThat(names("herbert", null, null)).containsExactly("Children of Dune", "Dune");
 		assertThat(names("nothing like this", null, null)).isEmpty();
 	}
@@ -194,6 +194,39 @@ class GroupSearchTests extends WebTest {
 	}
 
 	@Test
+	void closestMatchesComeFirst() {
+		items.save(new Item(alex, "Sada vrtáků", "Hodí se do vrtačky", Category.TOOL, true));
+		items.save(new Item(alex, "Aku vrtačka", null, Category.TOOL, true));
+		items.save(new Item(sam, "Vrtačka", "Stará, ale funguje", Category.TOOL, true));
+		items.save(new Item(sam, "Příklepová vrtačka", null, Category.TOOL, true));
+
+		// Exact name, then the whole word in the name (in name order), then the description.
+		assertThat(names("vrtačka", null, null))
+			.containsExactly("Vrtačka", "Aku vrtačka", "Příklepová vrtačka", "Sada vrtáků");
+		// Another word form in the name still beats the word in the description.
+		assertThat(names("vrtačky", null, null))
+			.containsExactly("Aku vrtačka", "Příklepová vrtačka", "Vrtačka", "Sada vrtáků");
+		// The exact title before the title with the word further in (Kim isn't in the group).
+		assertThat(names("dune", null, null)).containsExactly("Dune", "Children of Dune");
+	}
+
+	@Test
+	void theFiltersAloneKeepTheNameOrder() {
+		assertThat(names(null, "BOOK", "true")).containsExactly("Children of Dune", "Dune");
+	}
+
+	@Test
+	void thePageSaysTheClosestMatchesComeFirstOnlyForTypedText() throws Exception {
+		mvc.perform(get("/groups/{id}", group.getId()).with(as(alex)).param("q", "dune"))
+			.andExpect(content().string(containsString("Closest matches first.")));
+		mvc.perform(get("/groups/{id}", group.getId()).with(as(alex)).param("category", "BOOK"))
+			.andExpect(content().string(not(containsString("Closest matches first."))));
+		// One match has no order to explain.
+		mvc.perform(get("/groups/{id}", group.getId()).with(as(alex)).param("q", "catan"))
+			.andExpect(content().string(not(containsString("Closest matches first."))));
+	}
+
+	@Test
 	void anIsbnFindsTheBookWhateverFormatItIsTypedIn() {
 		assertThat(names("0-441-01359-7", null, null)).containsExactly("Dune");
 		assertThat(names("978 0441 013593", null, null)).containsExactly("Dune");
@@ -212,7 +245,7 @@ class GroupSearchTests extends WebTest {
 		loanService.lendToOutsider(dune.getId(), sam.getId(), "Grandma", dates.today().plusDays(7));
 
 		assertThat(names("dune", null, "true")).containsExactly("Children of Dune");
-		assertThat(names("dune", null, null)).containsExactly("Children of Dune", "Dune");
+		assertThat(names("dune", null, null)).containsExactly("Dune", "Children of Dune");
 		GroupService.GroupPage page = groupService.page(group.getId(), alex.getId(),
 				ItemFilter.parse(null, null, "true"));
 		assertThat(page.lendableCount()).isEqualTo(4);

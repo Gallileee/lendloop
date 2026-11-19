@@ -1,5 +1,31 @@
 # Progress log
 
+## 2026-11-19: Milestone 3u, closest search matches first
+
+Why: next step 4. Since the Czech word forms (3t), a search finds more, and the results were still in plain name order: searching "dune" listed "Children of Dune" before "Dune", and "vrtačka" could put "Sada vrtáků" (which mentions "do vrtačky" in its description) above the drill called just "Vrtačka".
+
+Design: tiers, as in the "exact, then prefix, then contains" ordering most site searches use, and in line with Dolamic & Savoy's point (see 3t) that stems are a recall aid: a stem-only match ranks below a match of the typed text in the name. No scores to tune.
+
+Acceptance criteria:
+- With typed text, results come in this order: the exact name or the book's ISBN; a name starting with the typed words; the words elsewhere in the name; part of a word in the name; another Czech word form in the name; the words in the description; anything else (part of a word or a word form in the description).
+- Within a tier, the old order (name ignoring case, then id).
+- A category or "free right now" without text keeps the plain name order; what matches doesn't change, only the order.
+- The page says "Closest matches first." (Czech: "Nejbližší shody jsou nahoře.") when text was typed and more than one thing matches.
+
+Done:
+- `group.SearchRank`: `Tier` enum, `tier(item, filter)` on the stored `search_text` / `search_stems` (first line = name, second = description) and `hasWholeWords` (no letter or digit on either side), `bestFirst` = a stable `List.sort` by tier. `GroupService.page` copies the query result into an `ArrayList` and ranks it.
+- `groups/detail.html` + `group.search.bestFirst` in English and Czech.
+- Tests: `SearchRankTest` (20: 16 tier cases, ISBN, word boundaries, stable order, no text), `GroupSearchTests` +3 (closest first in Czech and English, filters alone keep name order, the note), and one existing expectation changed on purpose ("dune" with "free right now" off now lists "Dune" first).
+
+Verified:
+- `./mvnw test`: 374 tests, 0 failures, 7 skipped (PostgreSQL / Docker; CI runs them).
+- Browser (`lendloop-memory-demo`, Czech, dark mode): with "Vrtačka", "Aku vrtačka", "Příklepová vrtačka" and "Sada vrtáků" ("Hodí se do vrtačky"), "vrtačka" lists them in that order and "vrtačky" lists Aku, Příklepová, Vrtačka, Sada; the note shows above the list and the count says "4 z 4". This also covers the Czech word forms part of next step 1.
+- Mutation checks, each restored afterwards: without the `bestFirst` call, 2 `GroupSearchTests` fail; with the name-start tier not checking the word end, 3 `SearchRankTest` cases fail; without the left word boundary, 1 fails.
+
+Trade-offs and limits:
+- Ranking happens in Java on the unpaged result (tens of things per group). If the group page is ever paged, the tiers must move into SQL (`order by case ... end`), or each page would be ranked on its own.
+- No typo tolerance and no weighting by how many words match; a multi-word search is still one phrase.
+
 ## 2026-11-17: Milestone 3t, Czech word forms in search
 
 Why: next step 4. Czech nouns and adjectives change their endings with the case, so someone looking for a drill types "vrtačky" (have you got any drills?) or "vrtačku", and the substring search only found "vrtačka" when typed in that form.
@@ -719,6 +745,5 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 1. Browser checks: `lendloop-memory-demo` for the book covers (phone width, dark mode, ISBN 9780441013593) and *Change email* (pending state, cancel, confirm page; `preview_logs` search "change-email?token="); `lendloop-cleanup-demo` for the warning email and the deletion in the log.
 2. Show the deletion date in the "confirm your email" banner once an account has been warned.
-   Also the Czech word forms in search: "vrtačky" and "příklepové vrt" on the Czech group page.
 3. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
-4. Search ranking: with stems, more things match; show whole-word and exact matches first.
+4. Search: typo tolerance for short names (e.g. one wrong letter in words of 5+ letters), if it doesn't flood the results.
