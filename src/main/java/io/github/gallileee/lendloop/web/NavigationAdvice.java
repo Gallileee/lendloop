@@ -2,24 +2,29 @@ package io.github.gallileee.lendloop.web;
 
 import io.github.gallileee.lendloop.loan.LoanService;
 import io.github.gallileee.lendloop.security.AppUserDetails;
+import io.github.gallileee.lendloop.security.UnconfirmedAccountCleanup;
 import io.github.gallileee.lendloop.user.AppUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.LocalDate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
 // Data for the top bar on every page: which section is open (Thymeleaf 3.1 no longer exposes
 // the request to templates), how many borrow requests wait for the user's answer, and whether
-// to ask the user to confirm their email. Also whether the user wants book covers.
+// to ask the user to confirm their email (with the deletion date once the account has been warned).
+// Also whether the user wants book covers.
 @ControllerAdvice
 public class NavigationAdvice {
 
 	private final LoanService loanService;
 	private final AppUserRepository users;
+	private final UnconfirmedAccountCleanup cleanup;
 
-	public NavigationAdvice(LoanService loanService, AppUserRepository users) {
+	public NavigationAdvice(LoanService loanService, AppUserRepository users, UnconfirmedAccountCleanup cleanup) {
 		this.loanService = loanService;
 		this.users = users;
+		this.cleanup = cleanup;
 	}
 
 	@ModelAttribute("section")
@@ -53,6 +58,15 @@ public class NavigationAdvice {
 	@ModelAttribute("emailUnconfirmed")
 	boolean emailUnconfirmed(@AuthenticationPrincipal AppUserDetails me, HttpServletRequest request) {
 		return me != null && "GET".equals(request.getMethod()) && users.existsByIdAndEmailVerifiedAtIsNull(me.id());
+	}
+
+	// Set only for an account that was warned and would still be deleted (unconfirmed, unused).
+	@ModelAttribute("deletionDate")
+	LocalDate deletionDate(@AuthenticationPrincipal AppUserDetails me, HttpServletRequest request) {
+		if (me == null || !"GET".equals(request.getMethod())) {
+			return null;
+		}
+		return cleanup.deletionDateOf(me.id()).orElse(null);
 	}
 
 	// Book covers are opt-in (Settings), so nobody's IP address goes to Open Library unasked.

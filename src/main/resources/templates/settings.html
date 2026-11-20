@@ -78,6 +78,10 @@
           <p class="muted" th:text="#{settings.email.pending}">
             Lendloop doesn't send you reminders until you open the link we emailed you when you signed up.
           </p>
+          <p th:if="${deletionDate != null}" class="alert"
+             th:text="#{settings.email.deletion(${@dates.local(deletionDate)})}">
+            This account will be deleted on 31 Oct 2026 or soon after.
+          </p>
           <form th:action="@{/settings/email/resend}" method="post">
             <button type="submit" class="button button-secondary" th:text="#{settings.email.resend}">Send the link again</button>
           </form>

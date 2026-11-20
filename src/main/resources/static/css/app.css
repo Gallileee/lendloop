@@ -345,6 +345,8 @@ a.status { text-decoration: none; }
   border-bottom: 1px solid var(--border);
   text-align: center;
 }
+/* The account was warned and will be deleted: as urgent as an error, not a tip. */
+.banner-warning { background: var(--alert-bg); }
 
 /* Language switcher at the bottom of every page. */
 .footer {

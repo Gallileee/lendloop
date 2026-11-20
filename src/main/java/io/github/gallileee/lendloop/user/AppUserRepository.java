@@ -48,6 +48,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 			+ UNUSED_AND_UNCONFIRMED)
 	int deleteIfUnused(Long id);
 
+	// A warned account that is still going to be deleted (unused and unconfirmed), for the date in
+	// the "confirm your email" banner. Checked live, so adding an item hides the date at once,
+	// before the next cleanup run forgets the warning.
+	@Query("select u from AppUser u where u.id = :id and u.deletionWarnedAt is not null and "
+			+ UNUSED_AND_UNCONFIRMED)
+	Optional<AppUser> findWarnedAndUnused(Long id);
+
 	// A warned account that was confirmed or started being used is no longer going to be deleted.
 	// If it becomes unused again later, it gets a new warning before anything happens.
 	@Modifying

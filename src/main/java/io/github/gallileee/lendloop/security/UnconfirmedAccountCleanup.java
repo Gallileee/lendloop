@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Locale;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -115,14 +116,21 @@ public class UnconfirmedAccountCleanup {
 		String link = verifications.newLink(user);
 		user.markDeletionWarned(now);
 		mailer.send(user.getEmail(), messages.in(user.getLocale(), "mail.unconfirmed.subject"),
-				text(user, link, deletionDate(user, now)), null);
+				text(user, link, deletionDate(user.getCreatedAt(), now)), null);
+	}
+
+	// The day a warned, still unused account will be deleted (or soon after: the job runs once a
+	// day), for the banner on every page; empty if it isn't going to be deleted.
+	public Optional<LocalDate> deletionDateOf(Long userId) {
+		return users.findWarnedAndUnused(userId)
+			.map(user -> deletionDate(user.getCreatedAt(), user.getDeletionWarnedAt()));
 	}
 
 	// The first day the account can be deleted: delete-after from sign-up, but never before the
-	// whole warning period has passed.
-	LocalDate deletionDate(AppUser user, Instant now) {
-		Instant byAge = user.getCreatedAt().plus(deleteAfter);
-		Instant byWarning = now.plus(warningPeriod);
+	// whole warning period has passed. The same conditions as findUnusedToDelete.
+	LocalDate deletionDate(Instant createdAt, Instant warnedAt) {
+		Instant byAge = createdAt.plus(deleteAfter);
+		Instant byWarning = warnedAt.plus(warningPeriod);
 		Instant when = byAge.isAfter(byWarning) ? byAge : byWarning;
 		return LocalDate.ofInstant(when, ZoneId.systemDefault());
 	}

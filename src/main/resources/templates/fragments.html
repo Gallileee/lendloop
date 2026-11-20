@@ -28,8 +28,9 @@
       </form>
     </nav>
   </header>
-  <p th:if="${emailUnconfirmed}" class="banner" role="status">
-    <th:block th:text="#{banner.confirmEmail}">Confirm your email address to get loan reminders: open the link we emailed you.</th:block>
+  <p th:if="${emailUnconfirmed}" class="banner" th:classappend="${deletionDate != null} ? 'banner-warning'" role="status">
+    <th:block th:if="${deletionDate == null}" th:text="#{banner.confirmEmail}">Confirm your email address to get loan reminders: open the link we emailed you.</th:block>
+    <th:block th:if="${deletionDate != null}" th:text="#{banner.confirmEmail.deletion(${@dates.local(deletionDate)})}">This account will be deleted on 31 Oct 2026 or soon after.</th:block>
     <a th:href="@{/settings#email}" th:text="#{banner.confirmEmail.link}">Didn't get it?</a>
   </p>
   </th:block>

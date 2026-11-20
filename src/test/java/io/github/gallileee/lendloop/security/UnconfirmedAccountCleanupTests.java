@@ -10,8 +10,13 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 
 import io.github.gallileee.lendloop.WebTest;
@@ -32,6 +37,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,6 +46,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.MailSendException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.ResultActions;
 
 // UnconfirmedAccountCleanup with the default settings (warned after 23 days, deleted after 30
 // and at least 7 days after the warning), run with explicit times instead of the clock.
@@ -258,5 +265,73 @@ class UnconfirmedAccountCleanupTests extends WebTest {
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("warning-period");
 		}
+	}
+
+	// --- the deletion date on the pages ---
+
+	private ResultActions page(String path, AppUser who, String language) throws Exception {
+		AppUser fresh = users.findById(who.getId()).orElseThrow();
+		return mvc.perform(get(path).with(user(AppUserDetails.from(fresh))).header("Accept-Language", language));
+	}
+
+	@Test
+	void theBannerShowsTheDeletionDateOnceTheAccountIsWarned() throws Exception {
+		AppUser kim = signedUp("kim@example.com", false);
+
+		page("/items", kim, "en")
+			.andExpect(content().string(containsString("Confirm your email address to get loan reminders")))
+			.andExpect(content().string(not(containsString("will be deleted"))));
+		assertThat(cleanup.deletionDateOf(kim.getId())).isEmpty();
+
+		cleanup.run(day(23));
+		assertThat(cleanup.deletionDateOf(kim.getId())).contains(LocalDate.of(2026, 10, 31));
+		page("/items", kim, "en")
+			.andExpect(content().string(containsString("banner banner-warning")))
+			.andExpect(content().string(containsString("This account will be deleted on 31 Oct 2026 or soon after")))
+			.andExpect(content().string(not(containsString("to get loan reminders"))));
+		page("/settings", kim, "en")
+			.andExpect(content().string(containsString("it will be deleted on 31 Oct 2026 or soon after")));
+		page("/items", kim, "cs")
+			.andExpect(content().string(containsString("Tento účet bude 31. 10. 2026 nebo krátce potom smazán")));
+		page("/settings", kim, "cs")
+			.andExpect(content().string(containsString("bude 31. 10. 2026 nebo krátce potom smazán. Zachráníte")));
+	}
+
+	@Test
+	void theDateMatchesTheWarningEmailWhenTheJobWasLate() {
+		AppUser kim = signedUp("kim@example.com", false);
+		cleanup.run(day(60));
+		assertThat(warningTo("kim@example.com")).contains("will be deleted on 7 Dec 2026");
+		assertThat(cleanup.deletionDateOf(kim.getId())).contains(LocalDate.of(2026, 12, 7));
+	}
+
+	@Test
+	void theDateGoesAwayAsSoonAsTheAccountIsUsedOrConfirmed() throws Exception {
+		AppUser kim = signedUp("kim@example.com", false);
+		AppUser alex = signedUp("alex@example.com", false);
+		cleanup.run(day(23));
+
+		// An item hides the date at once, before the next run forgets the warning.
+		items.save(new Item(kim, "Drill", null, Category.TOOL, true));
+		assertThat(warnedAt(kim)).isNotNull();
+		assertThat(cleanup.deletionDateOf(kim.getId())).isEmpty();
+		page("/items", kim, "en")
+			.andExpect(content().string(containsString("Confirm your email address to get loan reminders")))
+			.andExpect(content().string(not(containsString("will be deleted"))));
+
+		AppUser confirmed = users.findById(alex.getId()).orElseThrow();
+		confirmed.markEmailVerified(day(24));
+		users.save(confirmed);
+		assertThat(cleanup.deletionDateOf(alex.getId())).isEmpty();
+		page("/items", alex, "en")
+			.andExpect(content().string(not(containsString("Confirm your email address"))))
+			.andExpect(content().string(not(containsString("will be deleted"))));
+	}
+
+	@Test
+	void confirmedAccountsHaveNoDeletionDate() {
+		AppUser kim = signedUp("kim@example.com", true);
+		cleanup.run(day(365));
+		assertThat(cleanup.deletionDateOf(kim.getId())).isEmpty();
 	}
 }
