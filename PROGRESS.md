@@ -1,5 +1,27 @@
 # Progress log
 
+## 2026-11-20: Milestone 3v, the deletion date in the banner
+
+Why: next step 2. A warned account learned the deletion date only from the email, which may be the very email that never arrived (caught by a spam filter, or sent to a full inbox), while the page kept the mild "confirm to get loan reminders".
+
+Acceptance criteria:
+- Once an account is warned and would still be deleted (unconfirmed, no items, groups or loans as a borrower), every page's banner says when ("on 31 Oct 2026 or soon after", the same date as the email), in the warning colour, with the "Didn't get it?" link; Settings says it under the email address with what keeps the account.
+- The date goes away on the next page view after the account is confirmed or gets an item, not only after the next cleanup run.
+- Before the warning, and for confirmed accounts, nothing changes.
+
+Done:
+- `AppUserRepository.findWarnedAndUnused(id)`: warned and `UNUSED_AND_UNCONFIRMED`, checked live.
+- `UnconfirmedAccountCleanup.deletionDateOf(userId)`; `deletionDate(createdAt, warnedAt)` is now shared by the email and the pages (later of sign-up + delete-after and warning + warning-period, the same conditions as `findUnusedToDelete`).
+- `NavigationAdvice` `deletionDate` model attribute (GET, logged in); `fragments.html` banner text + `banner-warning` (alert background), `settings.html` alert; `banner.confirmEmail.deletion` and `settings.email.deletion` in English and Czech.
+- Tests: `UnconfirmedAccountCleanupTests` +4 (banner and Settings in both languages after the warning and not before, the date equal to a late job's email, gone at once after an item or a confirmation, none for confirmed accounts).
+
+Verified:
+- `./mvnw test`: 378 tests, 0 failures, 7 skipped (PostgreSQL / Docker; CI runs them).
+- Mutation checks, each restored afterwards: without the unused conditions in `findWarnedAndUnused`, without the warning period in the date, and with the banner date never shown, `UnconfirmedAccountCleanupTests` fails each time.
+- Demo (`lendloop-cleanup-demo`, packaged jar, 45 s / 90 s): a fresh unconfirmed account (registered and logged in with curl) showed the plain banner, and within a minute, after the job warned it, `/items` had `banner banner-warning` with "This account will be deleted on 20 Nov 2026 or soon after" and Czech Settings the alert with "20. 11. 2026". The pane was hidden, so this was checked on the HTML, not visually.
+
+Trade-off: one more primary-key query per logged-in page view (only GETs), like the existing banner check.
+
 ## 2026-11-19: Milestone 3u, closest search matches first
 
 Why: next step 4. Since the Czech word forms (3t), a search finds more, and the results were still in plain name order: searching "dune" listed "Children of Dune" before "Dune", and "vrtačka" could put "Sada vrtáků" (which mentions "do vrtačky" in its description) above the drill called just "Vrtačka".
@@ -744,6 +766,5 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 ## Next steps (in order)
 
 1. Browser checks: `lendloop-memory-demo` for the book covers (phone width, dark mode, ISBN 9780441013593) and *Change email* (pending state, cancel, confirm page; `preview_logs` search "change-email?token="); `lendloop-cleanup-demo` for the warning email and the deletion in the log.
-2. Show the deletion date in the "confirm your email" banner once an account has been warned.
-3. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
-4. Search: typo tolerance for short names (e.g. one wrong letter in words of 5+ letters), if it doesn't flood the results.
+2. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
+3. Search: typo tolerance for short names (e.g. one wrong letter in words of 5+ letters), if it doesn't flood the results.
