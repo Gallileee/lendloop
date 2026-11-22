@@ -1,5 +1,34 @@
 # Progress log
 
+## 2026-11-22: Milestone 3w, one typo forgiven in the group search
+
+Why: next step 3. A search with a typo ("vrtacak", "herbrt") said "Nothing matches your search." although the thing was right there, and someone on a phone keyboard makes such typos all the time.
+
+Research: Damerau, "A technique for computer detection and correction of spelling errors" (Communications of the ACM 7(3), 1964, https://doi.org/10.1145/363958.363994) found that over 80 % of misspellings are one insertion, deletion, substitution or swap of neighbours. Elasticsearch's `fuzziness: AUTO` (https://www.elastic.co/guide/en/elasticsearch/reference/current/common-options.html#fuzziness) allows no edit up to 2 letters, one for 3-5 and two from 6; here it is one edit from 5 letters, since "dune" or "cat" are one edit from too many other words.
+
+Acceptance criteria:
+- When the typed text finds nothing, things whose name (or description) has the same words with one edit per word of 5+ letters are shown, in order and next to each other as in the plain search, name matches first.
+- A search that finds something is never given look-alikes ("drill" doesn't bring "Cordless dryll").
+- Category and "free right now" still apply; shorter words must match the start of a word; two edits find nothing.
+- The page says so: "Nothing matches “herbrt” exactly. These are spelled similarly." (Czech: "Nic neodpovídá přesně „herbrt“. Tyhle věci se píšou podobně.") instead of "Closest matches first."
+
+Done:
+- `group.TypoMatch`: `withinOneEdit` (Damerau / optimal string alignment distance <= 1 in one pass), `close` (one edit for words of 5+ letters without digits, or on the stems when the typed word has a Czech ending: "rtačky" -> "Vrtačka"; not for "vrták" vs "vrtačka", which are different things), `where` (the words as a phrase in the name or the description) and `similar` (name matches first, stable).
+- `GroupService.page`: on an empty result with typed text, a second query with `ItemFilter.withoutText()` and `TypoMatch.similar`; `GroupPage.similar`.
+- `groups/detail.html` note + `group.search.similar` in English and Czech.
+- Tests: `TypoMatchTest` (30: 15 edit cases both ways, 10 typed-word cases, phrase and line rules, order, short searches, two edits), `GroupSearchTests` +3 (fallback with filters, exact match keeps look-alikes out, the note in both languages), one existing case changed on purpose (`rtačky` is now found as a typo, so the "stem must start a word" case uses `tačky`).
+
+Verified:
+- `./mvnw test`: 411 tests, 0 failures, 7 skipped (PostgreSQL / Docker; CI runs them).
+- Mutation checks, each restored afterwards (all killed): no fallback (3 failures), fallback even after a match (12), no swap (6), stem route for words without an ending (1), 4-letter words corrected (4), fallback ignoring the other filters (1), words in any order (2).
+
+Not verified: the page in a browser (starting `lendloop-memory-demo` was declined in this automated run); the note's HTML is checked by MockMvc in both languages.
+
+Trade-offs and limits:
+- Fallback only: a search that finds one thing won't also show the thing the person meant. Showing both would need a score to keep look-alikes below real matches (SearchRank tiers could take a "typo" tier), at the risk of flooding a short search.
+- The fallback loads every lendable thing that passes the other filters and compares in Java: fine for tens of things per group, and only on a miss. A large group would want PostgreSQL's `pg_trgm` or `fuzzystrmatch`, which H2 doesn't have.
+- No typo in the last word while it's still being typed ("vrtac" with a letter wrong), since a prefix with an edit matches too much.
+
 ## 2026-11-20: Milestone 3v, the deletion date in the banner
 
 Why: next step 2. A warned account learned the deletion date only from the email, which may be the very email that never arrived (caught by a spam filter, or sent to a full inbox), while the page kept the mild "confirm to get loan reminders".
@@ -765,6 +794,6 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 ## Next steps (in order)
 
-1. Browser checks: `lendloop-memory-demo` for the book covers (phone width, dark mode, ISBN 9780441013593) and *Change email* (pending state, cancel, confirm page; `preview_logs` search "change-email?token="); `lendloop-cleanup-demo` for the warning email and the deletion in the log.
+1. Browser checks: `lendloop-memory-demo` for the typo note ("vrtacak" with a "Vrtačka" in the group, Czech, phone width), the book covers (phone width, dark mode, ISBN 9780441013593) and *Change email* (pending state, cancel, confirm page; `preview_logs` search "change-email?token="); `lendloop-cleanup-demo` for the warning email and the deletion in the log.
 2. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
-3. Search: typo tolerance for short names (e.g. one wrong letter in words of 5+ letters), if it doesn't flood the results.
+3. Search: typo results next to real matches as a lower SearchRank tier, if a check with real group data shows they don't flood short searches.
