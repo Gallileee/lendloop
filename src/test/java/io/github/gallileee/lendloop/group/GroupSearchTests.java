@@ -140,8 +140,9 @@ class GroupSearchTests extends WebTest {
 		items.save(new Item(alex, "Příklepová vrtačka", "Bosch, s kufříkem", Category.TOOL, true));
 
 		assertThat(names("vrtačky příklepové", null, null)).isEmpty();
-		// A stem has to start a word: "rtačky" is not "vrtačka".
-		assertThat(names("rtačky", null, null)).isEmpty();
+		// A stem has to start a word: "tačky" is not "vrtačka". ("rtačky" is one letter off, so the
+		// typo fallback finds it: see aTypoFindsTheThingWhenNothingMatchesExactly.)
+		assertThat(names("tačky", null, null)).isEmpty();
 		// Across the name and the description, as with the plain search.
 		assertThat(names("vrtačky bosch", null, null)).isEmpty();
 		assertThat(names("vrtak", null, null)).isEmpty();
@@ -208,6 +209,43 @@ class GroupSearchTests extends WebTest {
 			.containsExactly("Aku vrtačka", "Příklepová vrtačka", "Vrtačka", "Sada vrtáků");
 		// The exact title before the title with the word further in (Kim isn't in the group).
 		assertThat(names("dune", null, null)).containsExactly("Dune", "Children of Dune");
+	}
+
+	@Test
+	void aTypoFindsTheThingWhenNothingMatchesExactly() {
+		items.save(new Item(sam, "Vrtačka", "Stará, ale funguje", Category.TOOL, true));
+
+		assertThat(names("vrtacak", null, null)).containsExactly("Vrtačka");
+		assertThat(names("rtačky", null, null)).containsExactly("Vrtačka");
+		assertThat(names("herbrt", null, null)).containsExactly("Children of Dune", "Dune");
+		// The other filters still apply to the look-alikes.
+		assertThat(names("herbrt", "TOOL", null)).isEmpty();
+		// Too short to correct, and two letters wrong is too far.
+		assertThat(names("dnue", null, null)).isEmpty();
+		assertThat(names("vtracak", null, null)).isEmpty();
+	}
+
+	@Test
+	void anExactMatchKeepsLookAlikesOut() {
+		items.save(new Item(alex, "Cordless dryll", null, Category.TOOL, true));
+
+		// "dryll" is one letter from "drill", but "drill" matches exactly, so it stays out.
+		assertThat(names("drill", null, null)).containsExactly("Cordless drill");
+		// "drxll" matches nothing exactly and is one letter from both.
+		assertThat(names("drxll", null, null)).containsExactly("Cordless drill", "Cordless dryll");
+	}
+
+	@Test
+	void thePageSaysWhenItShowsSimilarSpellings() throws Exception {
+		mvc.perform(get("/groups/{id}", group.getId()).with(as(alex)).param("q", "herbrt"))
+			.andExpect(content().string(containsString("Nothing matches “herbrt” exactly. These are spelled similarly.")))
+			.andExpect(content().string(not(containsString("Closest matches first."))))
+			.andExpect(content().string(not(containsString("Nothing matches your search."))))
+			.andExpect(content().string(containsString(">Children of Dune</h3>")));
+		mvc.perform(get("/groups/{id}", group.getId()).with(as(alex)).param("q", "herbert"))
+			.andExpect(content().string(not(containsString("spelled similarly"))));
+		mvc.perform(get(URI.create("/groups/" + group.getId() + "?q=vrta%C4%8Dkx&lang=cs")).with(as(alex)))
+			.andExpect(content().string(containsString("Hledání nic nenašlo.")));
 	}
 
 	@Test

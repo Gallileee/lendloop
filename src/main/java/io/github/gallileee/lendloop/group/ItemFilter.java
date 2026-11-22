@@ -38,6 +38,11 @@ public record ItemFilter(String text, Category category, boolean availableNow) {
 		return new ItemFilter(text, parsedCategory, "true".equals(available));
 	}
 
+	// The same category and "free right now", without the text: what the typo fallback starts from.
+	public ItemFilter withoutText() {
+		return new ItemFilter("", category, availableNow);
+	}
+
 	public boolean isActive() {
 		return !text.isEmpty() || category != null || availableNow;
 	}

@@ -50,9 +50,10 @@ public class GroupService {
 	// Everything the group page shows, loaded in one transaction. `items` are the lendable items
 	// that match the filter, closest matches first when something was typed (SearchRank);
 	// `lendableCount` counts them all, so the page can say "2 of 9" and tell "nothing matches"
-	// apart from "nobody has added anything yet".
+	// apart from "nobody has added anything yet". `similar` says the typed text itself found
+	// nothing and `items` are the things it finds with a letter wrong (TypoMatch).
 	public record GroupPage(AppGroup group, GroupMember me, List<GroupMember> members, ItemFilter filter,
-			List<Item> items, long lendableCount) {
+			List<Item> items, long lendableCount, boolean similar) {
 	}
 
 	@Transactional
@@ -80,9 +81,18 @@ public class GroupService {
 		List<Item> shown = new ArrayList<>(items.findAll(
 				lendable.and(GroupItemSpecs.matching(filter)).and(GroupItemSpecs.withOwner()), ITEM_ORDER));
 		SearchRank.bestFirst(shown, filter);
+		boolean similar = false;
+		if (shown.isEmpty() && !filter.text().isEmpty()) {
+			// Nothing has the typed words: try them with one wrong letter, among the things that
+			// pass the other filters. A second query only on a miss, and a group has tens of things.
+			shown = TypoMatch.similar(items.findAll(
+					lendable.and(GroupItemSpecs.matching(filter.withoutText())).and(GroupItemSpecs.withOwner()),
+					ITEM_ORDER), filter);
+			similar = !shown.isEmpty();
+		}
 		long lendableCount = filter.isActive() ? items.count(lendable) : shown.size();
 		return new GroupPage(me.getGroup(), me, members.findByGroupIdWithUser(groupId), filter, shown,
-				lendableCount);
+				lendableCount, similar);
 	}
 
 	@Transactional
