@@ -18,6 +18,11 @@ public class SettingsForm {
 
 	private boolean showBookCovers;
 
+	// A Boolean, unlike the boxes above: added later, so a Settings page that was open before
+	// (and posts without it) leaves the stored value alone. The box's hidden "_notifyRequests"
+	// field makes Spring bind an unticked box as false.
+	private Boolean notifyRequests;
+
 	// The language of the emails: one of LanguageResolver.SUPPORTED. Left out (null), the
 	// stored language stays as it is.
 	@Pattern(regexp = "en|cs", message = "{validation.language}")
@@ -28,6 +33,7 @@ public class SettingsForm {
 		form.setDisplayName(user.getDisplayName());
 		form.setRemindBorrowed(user.isRemindBorrowed());
 		form.setNotifyLentOverdue(user.isNotifyLentOverdue());
+		form.setNotifyRequests(user.isNotifyRequests());
 		form.setEmailLanguage(user.getLocale().getLanguage());
 		form.setShowBookCovers(user.isShowBookCovers());
 		return form;
@@ -55,6 +61,14 @@ public class SettingsForm {
 
 	public void setNotifyLentOverdue(boolean notifyLentOverdue) {
 		this.notifyLentOverdue = notifyLentOverdue;
+	}
+
+	public Boolean getNotifyRequests() {
+		return notifyRequests;
+	}
+
+	public void setNotifyRequests(Boolean notifyRequests) {
+		this.notifyRequests = notifyRequests;
 	}
 
 	public boolean isShowBookCovers() {

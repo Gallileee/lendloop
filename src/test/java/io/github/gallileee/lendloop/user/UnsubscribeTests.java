@@ -75,6 +75,18 @@ class UnsubscribeTests extends WebTest {
 	}
 
 	@Test
+	void theRequestEmailsHaveTheirOwnLink() throws Exception {
+		mvc.perform(get(link(EmailList.REQUESTS)))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("emails about borrow requests and their answers")));
+		mvc.perform(post(link(EmailList.REQUESTS))).andExpect(status().isOk());
+
+		assertThat(reloaded().isNotifyRequests()).isFalse();
+		assertThat(reloaded().isRemindBorrowed()).isTrue();
+		assertThat(reloaded().isNotifyLentOverdue()).isTrue();
+	}
+
+	@Test
 	void aForgedLinkChangesNothing() throws Exception {
 		AppUser alex = users.save(new AppUser("alex@example.com", "Alex", "{noop}irrelevant"));
 		// Sam's signature with Alex's id.

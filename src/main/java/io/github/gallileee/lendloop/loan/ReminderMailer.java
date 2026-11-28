@@ -13,7 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.stereotype.Component;
 
-// Writes the reminder emails, in the recipient's language; Mailer sends them (or logs them when no mail server is set).
+// Writes the reminder and borrow-request emails, in the recipient's language; Mailer sends them (or logs them when no mail server is set).
 @Component
 class ReminderMailer {
 
@@ -50,6 +50,10 @@ class ReminderMailer {
 
 	void sendOwnerReminder(Loan loan, ReminderKind kind, LocalDate today) throws MailException {
 		deliver(writeOwnerReminder(loan, kind, today));
+	}
+
+	void sendRequestEmail(Loan loan, RequestEvent.Kind kind) throws MailException {
+		deliver(writeRequestEmail(loan, kind));
 	}
 
 	private void deliver(Email mail) {
@@ -110,6 +114,31 @@ class ReminderMailer {
 					daysLate(loan, today, lang));
 		}
 		return mail(to, EmailList.LENT, subject, body);
+	}
+
+	// A new request goes to the owner, with the borrower's message; an answer goes to the borrower.
+	Email writeRequestEmail(Loan loan, RequestEvent.Kind kind) {
+		String item = singleLine(loan.getItem().getName());
+		String owner = singleLine(loan.getItem().getOwner().getDisplayName());
+		if (kind == RequestEvent.Kind.REQUESTED) {
+			AppUser to = loan.getItem().getOwner();
+			Locale lang = to.getLocale();
+			String borrower = singleLine(loan.getBorrowerDisplayName());
+			// One line, so a message can't fake the footer with its own "Stop them:" link.
+			String message = loan.getMessage() == null ? ""
+					: messages.in(lang, "mail.request.message", singleLine(loan.getMessage()));
+			return mail(to, EmailList.REQUESTS, messages.in(lang, "mail.request.subject", borrower, item),
+					messages.in(lang, "mail.request.body", borrower, item, message));
+		}
+		AppUser to = loan.getBorrower();
+		Locale lang = to.getLocale();
+		if (kind == RequestEvent.Kind.APPROVED) {
+			String due = dates.format(loan.getDueDate(), lang);
+			return mail(to, EmailList.REQUESTS, messages.in(lang, "mail.approved.subject", owner, item),
+					messages.in(lang, "mail.approved.body", owner, item, due));
+		}
+		return mail(to, EmailList.REQUESTS, messages.in(lang, "mail.declined.subject", owner, item),
+				messages.in(lang, "mail.declined.body", owner, item));
 	}
 
 	// Every email ends with a one-click link that turns off this kind of email, and a link to

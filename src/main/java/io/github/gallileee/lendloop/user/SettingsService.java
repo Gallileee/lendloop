@@ -24,6 +24,9 @@ public class SettingsService {
 		AppUser user = load(userId);
 		user.changeSettings(form.getDisplayName().trim(), form.isRemindBorrowed(), form.isNotifyLentOverdue());
 		user.changeBookCovers(form.isShowBookCovers());
+		if (form.getNotifyRequests() != null) {
+			user.changeNotifyRequests(form.getNotifyRequests());
+		}
 		if (form.getEmailLanguage() != null) {
 			user.changeLanguage(Locale.forLanguageTag(form.getEmailLanguage()));
 		}

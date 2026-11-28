@@ -53,7 +53,42 @@ class SettingsTests extends WebTest {
 			.andExpect(status().isOk())
 			.andExpect(content().string(containsString("value=\"Alex\"")))
 			.andExpect(content().string(containsString("name=\"remindBorrowed\" value=\"true\" checked")))
-			.andExpect(content().string(containsString("name=\"notifyLentOverdue\" value=\"true\" checked")));
+			.andExpect(content().string(containsString("name=\"notifyLentOverdue\" value=\"true\" checked")))
+			.andExpect(content().string(containsString("name=\"notifyRequests\" value=\"true\" checked")));
+	}
+
+	@Test
+	void theRequestEmailsCanBeTurnedOffAndOnAgain() throws Exception {
+		mvc.perform(post("/settings").with(asAlex()).with(csrf())
+				.param("displayName", "Alex")
+				.param("_remindBorrowed", "on")
+				.param("_notifyLentOverdue", "on")
+				.param("_notifyRequests", "on"))
+			.andExpect(redirectedUrl("/settings"));
+		assertThat(reloaded().isNotifyRequests()).isFalse();
+
+		mvc.perform(post("/settings").with(asAlex()).with(csrf())
+				.param("displayName", "Alex")
+				.param("notifyRequests", "true")
+				.param("_notifyRequests", "on"))
+			.andExpect(redirectedUrl("/settings"));
+		assertThat(reloaded().isNotifyRequests()).isTrue();
+	}
+
+	@Test
+	void aSettingsPageOpenedBeforeTheRequestBoxExistedLeavesItAlone() throws Exception {
+		AppUser off = reloaded();
+		off.changeNotifyRequests(false);
+		users.save(off);
+
+		// No notifyRequests and no _notifyRequests field at all.
+		mvc.perform(post("/settings").with(asAlex()).with(csrf())
+				.param("displayName", "Alex")
+				.param("remindBorrowed", "true")
+				.param("notifyLentOverdue", "true"))
+			.andExpect(redirectedUrl("/settings"));
+
+		assertThat(reloaded().isNotifyRequests()).isFalse();
 	}
 
 	@Test

@@ -38,6 +38,11 @@ public class AppUser {
 	@Column(name = "notify_lent_overdue", nullable = false)
 	private boolean notifyLentOverdue = true;
 
+	// See V17__request_emails.sql: an email about a new borrow request for my things, and about
+	// the answer to my own requests.
+	@Column(name = "notify_requests", nullable = false)
+	private boolean notifyRequests = true;
+
 	// See V9__session_version.sql: sessions that logged in with an older number are ended.
 	@Column(name = "session_version", nullable = false)
 	private int sessionVersion;
@@ -96,6 +101,10 @@ public class AppUser {
 		this.displayName = displayName;
 		this.remindBorrowed = remindBorrowed;
 		this.notifyLentOverdue = notifyLentOverdue;
+	}
+
+	public void changeNotifyRequests(boolean notifyRequests) {
+		this.notifyRequests = notifyRequests;
 	}
 
 	// After a password change or reset; the caller has already hashed it. Every session that is
@@ -159,6 +168,7 @@ public class AppUser {
 		switch (list) {
 			case BORROWED -> remindBorrowed = false;
 			case LENT -> notifyLentOverdue = false;
+			case REQUESTS -> notifyRequests = false;
 		}
 	}
 
@@ -166,6 +176,7 @@ public class AppUser {
 		return switch (list) {
 			case BORROWED -> remindBorrowed;
 			case LENT -> notifyLentOverdue;
+			case REQUESTS -> notifyRequests;
 		};
 	}
 
@@ -195,5 +206,9 @@ public class AppUser {
 
 	public boolean isNotifyLentOverdue() {
 		return notifyLentOverdue;
+	}
+
+	public boolean isNotifyRequests() {
+		return notifyRequests;
 	}
 }
