@@ -1,5 +1,37 @@
 # Progress log
 
+## 2026-11-28: Milestone 3x, borrow requests and answers by email
+
+Why: the README's first limitation was "Only due dates are emailed. New requests and answers are only visible in the app." So an owner who doesn't open Lendloop for a week never sees that a friend asked for the drill, and the friend waits without knowing. (The browser checks of next step 1 were tried first; starting `lendloop-memory-demo` was declined again in this automated run.)
+
+Design: one more email list, `EmailList.REQUESTS`, with its own Settings box and its own signed one-click unsubscribe link, on by default like the others. `LoanService` publishes a `RequestEvent` (loan id + REQUESTED / APPROVED / DECLINED); `RequestEmails` is a `@TransactionalEventListener` (after commit), loads the loan in a new read-only transaction and writes the email with `ReminderMailer` (same greeting, Loans link and unsubscribe footer as the reminders). After commit, because sending inside the transaction would email about a request that is then rolled back (a lost race on V3's unique constraints), and a mail error would undo the request.
+
+Acceptance criteria:
+- A new request emails the owner, with the borrower's name, the item and the message (on one line); approving emails the borrower the return date; declining tells the borrower. In each recipient's language.
+- Withdrawing a request, or a request the rules refuse, sends nothing.
+- Nobody is emailed who turned these emails off (Settings or the link) or hasn't confirmed their address.
+- A mail server that is down doesn't undo the request or show an error; it's logged.
+- Turning these off leaves the other two lists alone, and a Settings page opened before the box existed (posting without it) doesn't turn them off.
+
+Done:
+- `V17__request_emails.sql`: `app_user.notify_requests` (default true, not null).
+- `EmailList.REQUESTS`, `AppUser.notifyRequests` / `changeNotifyRequests`, `turnOff` / `wants`; `SettingsForm.notifyRequests` as a `Boolean` (null = keep), `SettingsService`, `settings.html` box.
+- `RequestEvent`, `RequestEmails` (skips a loan whose status has changed since), `LoanService` publishes after `request`, `approve`, `decline`; `ReminderMailer.writeRequestEmail`.
+- Texts in English and Czech (`mail.request.*`, `mail.approved.*`, `mail.declined.*`, `emailList.REQUESTS`, `settings.notifyRequests`); Czech subjects keep names in brackets in the nominative ("Žádost schválena: „Catan“ (Alex)").
+- Tests: `RequestEmailTests` (11), `SettingsTests` +2 (off and on again, older page keeps it) and the new box on by default, `UnsubscribeTests` +1 (the REQUESTS link turns off only that list).
+
+Verified:
+- `./mvnw test`: 425 tests, 0 failures, 7 skipped (PostgreSQL / Docker; CI runs them, including V17 on PostgreSQL).
+- Mutation checks on `RequestEmailTests`, each restored afterwards: no event after a request (8 failures), a plain `@EventListener` instead of after commit (8: the new transaction can't see the uncommitted loan yet), no `mayBeEmailed` check (1), the message not put on one line (1). Equivalent: dropping the `catch (MailException)`, since Spring runs after-commit listeners in `afterCompletion`, which logs and swallows the exception anyway; the catch is kept for a clearer log line.
+
+Not verified: the Settings box in a browser (the demo start was declined); its HTML is checked by MockMvc.
+
+Trade-offs and limits:
+- Sent in the request thread: the page waits for the mail server. `@Async` would hide that, but a lost email would then also be invisible to tests and logs tied to the request; for a friends' app the wait is small.
+- Not retried; an outbox table would make it reliable, at the cost of a second job.
+- Existing users get the new emails without being asked, like V5 did for the overdue notice; every email can be turned off in one click.
+- Also removed a stale README limitation: emails have been in each user's language since V11.
+
 ## 2026-11-22: Milestone 3w, one typo forgiven in the group search
 
 Why: next step 3. A search with a typo ("vrtacak", "herbrt") said "Nothing matches your search." although the thing was right there, and someone on a phone keyboard makes such typos all the time.
@@ -796,4 +828,5 @@ Not verified locally: the PostgreSQL test (needs Docker). CI runs it.
 
 1. Browser checks: `lendloop-memory-demo` for the typo note ("vrtacak" with a "Vrtačka" in the group, Czech, phone width), the book covers (phone width, dark mode, ISBN 9780441013593) and *Change email* (pending state, cancel, confirm page; `preview_logs` search "change-email?token="); `lendloop-cleanup-demo` for the warning email and the deletion in the log.
 2. Deployment on a free tier (set `UNSUBSCRIBE_SECRET` and a mail server).
-3. Search: typo results next to real matches as a lower SearchRank tier, if a check with real group data shows they don't flood short searches.
+3. Request emails: a daily digest instead of one email per request, if a group with many requests finds them noisy; and an email to the owner when a borrower withdraws a request they had already been told about.
+4. Search: typo results next to real matches as a lower SearchRank tier, if a check with real group data shows they don't flood short searches.

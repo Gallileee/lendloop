@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 // Two writes that race (two requests at once, two approvals of the same item) are stopped by
 // the unique constraints from V3__loans.sql. The repository flushes inside each method, so the
 // violation surfaces here as a DataIntegrityViolationException and the controller reports it.
+//
+// A new request and its answer are published as a RequestEvent; RequestEmails tells the other
+// side by email once the transaction has committed.
 @Service
 public class LoanService {
 
@@ -45,15 +49,17 @@ public class LoanService {
 	private final GroupMemberRepository members;
 	private final Dates dates;
 	private final Clock clock;
+	private final ApplicationEventPublisher events;
 
 	public LoanService(LoanRepository loans, ItemRepository items, AppUserRepository users,
-			GroupMemberRepository members, Dates dates, Clock clock) {
+			GroupMemberRepository members, Dates dates, Clock clock, ApplicationEventPublisher events) {
 		this.loans = loans;
 		this.items = items;
 		this.users = users;
 		this.members = members;
 		this.dates = dates;
 		this.clock = clock;
+		this.events = events;
 	}
 
 	// Everything the loans page shows, from the point of view of one user.
@@ -108,7 +114,9 @@ public class LoanService {
 		if (note != null && note.length() > 300) {
 			throw new LoanRuleException("loan.rule.messageTooLong", 300);
 		}
-		return loans.saveAndFlush(new Loan(item, users.getReferenceById(borrowerId), note, clock.instant()));
+		Loan loan = loans.saveAndFlush(new Loan(item, users.getReferenceById(borrowerId), note, clock.instant()));
+		events.publishEvent(new RequestEvent(loan.getId(), RequestEvent.Kind.REQUESTED));
+		return loan;
 	}
 
 	@Transactional
@@ -120,6 +128,7 @@ public class LoanService {
 		}
 		loan.approve(dueDate, clock.instant());
 		loans.flush();
+		events.publishEvent(new RequestEvent(loan.getId(), RequestEvent.Kind.APPROVED));
 		return loan;
 	}
 
@@ -153,6 +162,7 @@ public class LoanService {
 	public Loan decline(Long loanId, Long ownerId) {
 		Loan loan = asOwner(loanId, ownerId);
 		loan.decline(clock.instant());
+		events.publishEvent(new RequestEvent(loan.getId(), RequestEvent.Kind.DECLINED));
 		return loan;
 	}
 
